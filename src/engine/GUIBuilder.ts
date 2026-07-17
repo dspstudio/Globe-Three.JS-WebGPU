@@ -487,6 +487,13 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   bloomFolder.add(bloomPass.threshold, "value", 0, 1).name("Threshold");
 
   const cameraFolder = gui.addFolder("Camera");
+  cameraFolder
+    .add(camera, "fov", 5, 120, 1)
+    .name("Field of View")
+    .listen()
+    .onChange(() => {
+      camera.updateProjectionMatrix();
+    });
   cameraFolder.add(controls, "autoRotate").name("Auto Rotate");
   cameraFolder.add(controls, "autoRotateSpeed", 0.1, 5.0).name("Rotate Speed");
 
@@ -525,6 +532,8 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   const camActions = {
     reset: () => {
       options.controls.reset();
+      options.camera.fov = CONSTANTS.GUI.CAMERA.FOV;
+      options.camera.updateProjectionMatrix();
     },
   };
   cameraFolder.add(camActions, "reset").name("Reset View");
@@ -617,6 +626,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
           TRUE_INCLINATION: earthSettings.trueInclination,
         },
         CAMERA: {
+          FOV: camera.fov,
           POSITION: {
             x: camera.position.x,
             y: camera.position.y,
@@ -707,4 +717,15 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   };
   debugFolder.add(debugActions, "exportConstants").name("Copy GUI Constants");
   debugFolder.add(debugActions, "takeScreenshot").name("Take 4K Screenshot");
+
+  // Close all folders recursively so they start minimized/collapsed
+  const closeAll = (f: any) => {
+    if (typeof f.close === "function") {
+      f.close();
+    }
+    if (Array.isArray(f.folders)) {
+      f.folders.forEach((sub: any) => closeAll(sub));
+    }
+  };
+  closeAll(gui);
 }

@@ -148,7 +148,12 @@ export class Engine {
     this.renderer.shadowMap.enabled = false;
 
     if (onProgress) onProgress("Setting up Scene & Camera");
-    this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 1000);
+    this.camera = new THREE.PerspectiveCamera(
+      CONSTANTS.GUI.CAMERA.FOV,
+      1,
+      0.1,
+      1000,
+    );
     this.camera.position.set(
       CONSTANTS.GUI.CAMERA.POSITION.x,
       CONSTANTS.GUI.CAMERA.POSITION.y,

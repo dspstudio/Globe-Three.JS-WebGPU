@@ -90,7 +90,7 @@ export const CONSTANTS = {
       ENABLED: false,
       INTENSITY: 0.5,
       THICKNESS: 2,
-      SIZE: 0.1,
+      SIZE: 0.2,
       COLOR: 0xFFFFFF,
       INNER_FADE: 0.08,
       OUTER_FADE: 0.08,
@@ -135,6 +135,7 @@ export const CONSTANTS = {
       TRUE_INCLINATION: false,
     },
     CAMERA: {
+      FOV: 45,
       POSITION: { x: 0, y: 0, z: 50 },
       TARGET: { x: 0, y: 0, z: 0 },
       AUTO_ROTATE: false,
