@@ -61,7 +61,7 @@ export const CONSTANTS = {
     MOON_DISPLACEMENT: use2k ? "./ldem_4.png" : "./ldem_4.png",
   },
   GUI: {
-    SHOW: import.meta.env.DEV,
+    SHOW: typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("settings") !== "false") : true,
     BLOOM: {
       ENABLED: true,
       STRENGTH: 0.1,
