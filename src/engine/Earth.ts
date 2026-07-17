@@ -1,0 +1,345 @@
+import * as THREE from 'three';
+import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, sub, float, min, bumpMap } from 'three/tsl';
+import { MeshStandardNodeMaterial, MeshBasicNodeMaterial, MeshPhysicalNodeMaterial } from 'three/webgpu';
+import { CONSTANTS } from '../constants';
+
+export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: any, moonPosUniform: any, maxAnisotropy: number = 1): Promise<THREE.Group> {
+    const group = new THREE.Group();
+    
+    // Load textures
+    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex] = await Promise.all([
+        loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
+        loader.loadAsync(CONSTANTS.TEXTURES.SPECULAR),
+        loader.loadAsync(CONSTANTS.TEXTURES.NORMAL),
+        loader.loadAsync(CONSTANTS.TEXTURES.CLOUDS),
+        loader.loadAsync(CONSTANTS.TEXTURES.NIGHT)
+    ]);
+
+    colorMapTex.colorSpace = THREE.SRGBColorSpace;
+    cloudsMapTex.colorSpace = THREE.SRGBColorSpace;
+    nightMapTex.colorSpace = THREE.SRGBColorSpace;
+
+    colorMapTex.anisotropy = maxAnisotropy;
+    specularMapTex.anisotropy = maxAnisotropy;
+    normalMapTex.anisotropy = maxAnisotropy;
+    cloudsMapTex.anisotropy = maxAnisotropy;
+    nightMapTex.anisotropy = maxAnisotropy;
+
+    // 1. Earth base
+    const geoHigh = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
+    const geoMed = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)));
+    const geoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)), Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)));
+    const earthMaterial = new MeshPhysicalNodeMaterial();
+    
+    const sunDir = sunDirUniform;
+    
+    // Procedural shadow logic: 
+    // We compute the local UV that intersects the sun ray from the current fragment
+    const sunDirLocal = normalize(modelWorldMatrixInverse.mul(vec4(sunDir, 0.0)).xyz);
+    
+    const shadowDistUniform = uniform(CONSTANTS.GUI.CLOUD_SHADOWS.DISTANCE);
+    const shadowIntensityUniform = uniform(CONSTANTS.GUI.CLOUD_SHADOWS.INTENSITY);
+    const shadowColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.CLOUD_SHADOWS.COLOR)); // roughly 0.2, 0.25, 0.35
+
+    group.userData.shadowDist = shadowDistUniform;
+    group.userData.shadowIntensity = shadowIntensityUniform;
+    group.userData.shadowColor = shadowColorUniform;
+
+    // Instead of a tiny constant which is invisible, calculate roughly intersection or just use a larger exaggerated offset
+    // To make it visible, we use an offset that stretches based on angle, or just a noticeably large constant.
+    const shadowDist = mix(0.1, shadowDistUniform, smoothstep(0.8, 0.0, dot(normalize(positionLocal), sunDirLocal)));
+    const shadowPosLocal = positionLocal.add(sunDirLocal.mul(shadowDist)); // approximate cloud offset
+    const shadowUv = equirectUV(normalize(shadowPosLocal));
+
+    const shadowOpacity = texture(cloudsMapTex, shadowUv).r;
+    
+    const waterRoughnessUniform = uniform(CONSTANTS.GUI.OCEAN.ROUGHNESS);
+    const waterMetalnessUniform = uniform(CONSTANTS.GUI.OCEAN.METALNESS);
+    group.userData.waterRoughness = waterRoughnessUniform;
+    group.userData.waterMetalness = waterMetalnessUniform;
+    
+    // Calculate shadow dimmer mask
+    const cloudShadow = mix(vec3(1.0), shadowColorUniform, shadowOpacity.mul(shadowIntensityUniform));
+    
+    // Light is at (10, 5, 10) in Engine.ts
+    const sunDot = dot(normalize(positionWorld), sunDir);
+    
+    // Single unified fade from day to night across the terminator
+    const nightFade = smoothstep(0.2, -0.2, sunDot);
+    
+    // Twilight terminator gradient (optional sunset tint)
+    const twilightColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.TWILIGHT_COLOR));
+    group.userData.twilightColor = twilightColorUniform;
+    
+    const darkSideBrightnessUniform = uniform(CONSTANTS.GUI.ENVIRONMENT.DARK_SIDE_BRIGHTNESS);
+    group.userData.darkSideBrightness = darkSideBrightnessUniform;
+    
+    const cityLightsUniform = uniform(CONSTANTS.GUI.ENVIRONMENT.CITY_LIGHTS);
+    group.userData.cityLights = cityLightsUniform;
+
+    const twilight1 = smoothstep(0.0, 0.2, sunDot).oneMinus(); 
+    const twilight2 = smoothstep(-0.2, 0.0, sunDot);           
+    const twilightFactor = twilight1.mul(twilight2);
+    
+    // Only apply the twilight tint as a gentle additive glow or mix it softly
+    const twilightTint = mix(vec3(1.0), twilightColorUniform, twilightFactor.mul(0.5));
+
+    const spec = texture(specularMapTex).r;
+    
+    // Terrain Self-Shadowing (Occlusion from Sun using Normal Map)
+    const terrainShadowIntensityUniform = uniform(CONSTANTS.GUI.EARTH.TERRAIN_SHADOW_INTENSITY);
+    const terrainShadowOffsetUniform = uniform(CONSTANTS.GUI.EARTH.TERRAIN_SHADOW_OFFSET);
+    group.userData.terrainShadowIntensity = terrainShadowIntensityUniform;
+    group.userData.terrainShadowOffset = terrainShadowOffsetUniform;
+    
+    const surfaceNorm = normalize(positionLocal);
+    // Rough tangent space from sphere
+    const vTan = normalize(cross(vec3(0.0, 1.0, 0.0), surfaceNorm));
+    const vBit = normalize(cross(surfaceNorm, vTan));
+    
+    // Current perturbed normal
+    const nMap = texture(normalMapTex).xyz.mul(2.0).sub(1.0);
+    const pNorm = normalize(vTan.mul(nMap.x).add(vBit.mul(nMap.y)).add(surfaceNorm.mul(nMap.z)));
+    const terrainDot = max(0.0, dot(pNorm, sunDirLocal));
+    
+    // Offset UV towards the sun to read adjacent normal
+    const sunProj = sunDirLocal.sub(surfaceNorm.mul(dot(sunDirLocal, surfaceNorm)));
+    const sunT = normalize(sunProj.add(vec3(0.000001)));
+    const offsetPos = normalize(positionLocal.add(sunT.mul(terrainShadowOffsetUniform)));
+    const offsetUv = equirectUV(offsetPos);
+    
+    const offsetNMap = texture(normalMapTex, offsetUv).xyz.mul(2.0).sub(1.0);
+    const pNormOffset = normalize(vTan.mul(offsetNMap.x).add(vBit.mul(offsetNMap.y)).add(surfaceNorm.mul(offsetNMap.z)));
+    const offsetDot = max(0.0, dot(pNormOffset, sunDirLocal));
+    
+    // If the adjacent point towards the sun is facing the sun more than we are, it casts a shadow
+    const occlusion = max(0.0, offsetDot.sub(terrainDot));
+    const landMask = spec.oneMinus(); // Land has dark specular
+    // Base shadow intensity multiplied by how much daylight we have
+    const daylightMask = smoothstep(0.0, 0.2, dot(surfaceNorm, sunDirLocal));
+    const selfShadowFactor = smoothstep(0.0, 0.3, occlusion).mul(landMask).mul(terrainShadowIntensityUniform).mul(daylightMask);
+    
+    // Apply a deep natural shadow color 
+    const terrainShadowColor = mix(vec3(1.0), vec3(0.1, 0.15, 0.2), selfShadowFactor);
+    
+    // --- Real-time Moon Eclipse Shadow Calculation ---
+    // Vector from current surface fragment to the moon
+    const fragmentToMoon = sub(moonPosUniform, positionWorld);
+    const distToMoon = length(fragmentToMoon);
+    const dirFragmentToMoon = normalize(fragmentToMoon);
+    
+    // Angle between moon direction and sun direction
+    // Clamp dot product to [-1.0, 1.0] to prevent acos(NaN)
+    const thetaMoon = acos(max(float(-1.0), min(float(1.0), dot(dirFragmentToMoon, sunDir))));
+    
+    // Angular dimensions
+    // For a realistic looking tight shadow (similar to real earth eclipses):
+    const thetaM = float(0.024); 
+    const sunAngularRadiusVal = float(0.02); 
+    
+    const penumbraOuter = thetaM.add(sunAngularRadiusVal);
+    const umbraInner = max(float(0.0), thetaM.sub(sunAngularRadiusVal));
+    
+    // Smooth transition from full light (0) to deep umbra (1)
+    const moonEclipseShadow = smoothstep(penumbraOuter, umbraInner, thetaMoon);
+    const eclipseDimmer = mix(vec3(1.0), vec3(0.015, 0.02, 0.025), moonEclipseShadow);
+    // --------------------------------------------------
+
+    earthMaterial.colorNode = texture(colorMapTex).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer) as any;
+    
+    // Specular map for water reflections: white spec = water, black spec = land
+    const baseRoughness = mix(0.9, waterRoughnessUniform, spec);
+    const baseMetalness = mix(0.0, waterMetalnessUniform, spec);
+    
+    // Completely kill the specular highlight of the directional sun light in the umbra
+    earthMaterial.roughnessNode = mix(baseRoughness, float(1.0), moonEclipseShadow);
+    earthMaterial.metalnessNode = mix(baseMetalness, float(0.0), moonEclipseShadow);
+    earthMaterial.specularColorNode = mix(vec3(1.0), vec3(0.0), moonEclipseShadow);
+    earthMaterial.specularIntensityNode = mix(float(1.0), float(0.0), moonEclipseShadow);
+    earthMaterial.iorNode = mix(float(1.5), float(1.0), moonEclipseShadow);
+    
+    const bumpScaleUniform = uniform(vec2(CONSTANTS.GUI.EARTH.BUMP_SCALE, CONSTANTS.GUI.EARTH.BUMP_SCALE));
+    group.userData.bumpScale = bumpScaleUniform;
+    
+    // Dynamic bump intensity fades as surface enters shadow
+    const bumpFade = smoothstep(-0.15, 0.15, sunDot);
+    earthMaterial.normalNode = normalMap(texture(normalMapTex), bumpScaleUniform.mul(bumpFade));
+
+    // The night map is RGB, we multiply by the fade factor and an intensity boost
+    // Multiplier dictates how deeply the lights bloom
+    const nightLights = texture(nightMapTex).mul(nightFade).mul(cityLightsUniform);
+    const darkSideAmbient = texture(colorMapTex).mul(nightFade).mul(darkSideBrightnessUniform).mul(0.5);
+    earthMaterial.emissiveNode = nightLights.add(darkSideAmbient) as any;
+    
+    const earthHigh = new THREE.Mesh(geoHigh, earthMaterial);
+    const earthMed = new THREE.Mesh(geoMed, earthMaterial);
+    const earthLow = new THREE.Mesh(geoLow, earthMaterial);
+
+    // 2. Clouds
+    const cloudsGeoHigh = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.05, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
+    const cloudsGeoMed = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.05, Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)));
+    const cloudsGeoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.05, Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)), Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)));
+    const cloudsMaterial = new MeshPhysicalNodeMaterial();
+    
+    const finalCloudOpacity = texture(cloudsMapTex).r;
+    
+    // Add subtle moon/starlight scattering on the dark side
+    // And base baseDarkSideScatter on nightFade to match earth
+    const baseDarkSideScatter = mix(vec3(0.005, 0.007, 0.01), vec3(0.05, 0.06, 0.08), nightFade);
+    const darkSideScatter = baseDarkSideScatter.mul(darkSideBrightnessUniform).mul(20.0);
+    
+    cloudsMaterial.colorNode = vec3(1.0).mul(twilightTint).mul(eclipseDimmer) as any;
+    cloudsMaterial.emissiveNode = darkSideScatter as any;
+    cloudsMaterial.roughnessNode = mix(float(0.9), float(1.0), moonEclipseShadow);
+    cloudsMaterial.specularColorNode = mix(vec3(1.0), vec3(0.0), moonEclipseShadow);
+    cloudsMaterial.specularIntensityNode = mix(float(1.0), float(0.0), moonEclipseShadow);
+    cloudsMaterial.iorNode = mix(float(1.5), float(1.0), moonEclipseShadow);
+    
+    // Procedural Cloud Normals from cloud height map - dynamically faded
+    cloudsMaterial.normalNode = bumpMap(texture(cloudsMapTex), float(0.02).mul(bumpFade));
+    
+    cloudsMaterial.transparent = true;
+    cloudsMaterial.opacityNode = finalCloudOpacity;
+    cloudsMaterial.depthWrite = false;
+    
+    const cloudsHigh = new THREE.Mesh(cloudsGeoHigh, cloudsMaterial);
+    cloudsHigh.name = 'clouds';
+
+    const cloudsMed = new THREE.Mesh(cloudsGeoMed, cloudsMaterial);
+    cloudsMed.name = 'clouds';
+
+    const cloudsLow = new THREE.Mesh(cloudsGeoLow, cloudsMaterial);
+    cloudsLow.name = 'clouds';
+
+    // 3. Atmosphere (Outer Halo)
+    // Renders behind the earth and extends outward to create a volumetric halo 
+    const atmosGeoHigh = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
+    const atmosGeoMed = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)));
+    const atmosGeoLow = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)), Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)));
+    const atmosMaterial = new MeshBasicNodeMaterial();
+    atmosMaterial.transparent = true;
+    atmosMaterial.side = THREE.BackSide;
+    atmosMaterial.depthWrite = false;
+    atmosMaterial.blending = THREE.AdditiveBlending;
+
+    // Vector math using TSL for WebGPU Fresnel
+    const dirToFrag = normalize(positionWorld.sub(cameraPosition));
+    const worldNormal = normalize(positionWorld);
+    
+    // v is 0 at the exact rim of the atmosphere sphere (R=10.2)
+    // and increases as we move inwards. Because the earth (R=10) blocks the rest,
+    // the maximum visible v is roughly sqrt(1 - (10/10.2)^2) ≈ 0.197
+    const v = dot(dirToFrag, worldNormal).clamp(0.0, 1.0);
+    
+    // Scale v so that it reaches near 1.0 at the point where the earth occludes it.
+    // That way the halo is bright right next to the earth, and softly fades to 0 at the outer edge.
+    const normalizedV = v.mul(5.0);
+    const opticalDepth = pow(normalizedV.clamp(0.00001, 1.0), 2.5);
+    
+    // Sun lighting calculations for atmospheric scattering
+    const sunDotAtmos = dot(worldNormal, sunDir);
+    const cosTheta = dot(dirToFrag, sunDir);
+    
+    // Configurable parameters via UserData
+    const rayleighColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.RAYLEIGH_COLOR));
+    const rayleighIntensityUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.RAYLEIGH_INTENSITY);
+    const mieColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.MIE_COLOR));
+    const airglowColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.AIRGLOW_COLOR));
+    const atmosModeUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.MODE === 'Scattering' ? 0.0 : 1.0);
+    const atmosDensityUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.DENSITY);
+    
+    group.userData.rayleighColor = rayleighColorUniform;
+    group.userData.rayleighIntensity = rayleighIntensityUniform;
+    group.userData.mieColor = mieColorUniform;
+    group.userData.airglowColor = airglowColorUniform;
+    group.userData.atmosMode = atmosModeUniform;
+    group.userData.atmosDensity = atmosDensityUniform;
+
+    // --- RAYLEIGH SCATTERING ---
+    // Phase Function: 3 / (16 * PI) * (1 + cosTheta^2)
+    const rayleighPhase = cosTheta.mul(cosTheta).add(1.0).mul(3.0 / (16.0 * Math.PI));
+    const rayleighScattering = rayleighColorUniform.mul(rayleighPhase).mul(atmosDensityUniform).mul(rayleighIntensityUniform);
+
+    // --- MIE SCATTERING ---
+    // Phase Function (Henyey-Greenstein)
+    const g = 0.76;
+    const g2 = g * g;
+    const miePhaseBase = cosTheta.mul(-2.0 * g).add(1.0 + g2);
+    // (3 * (1 - g^2) / (8 * PI * (2 + g^2))) * (1 + cosTheta^2) / (1 + g^2 - 2g*cosTheta)^1.5
+    const miePhaseCoeff = (3.0 * (1.0 - g2)) / (8.0 * Math.PI * (2.0 + g2));
+    const miePhase = cosTheta.mul(cosTheta).add(1.0).mul(miePhaseCoeff).div(pow(miePhaseBase, 1.5));
+    const mieScattering = mieColorUniform.mul(miePhase).mul(atmosDensityUniform);
+
+    // Overall intensity fade on the dark side of the earth
+    const intensityPhase = smoothstep(-0.2, 0.2, sunDotAtmos);
+
+    const scatteredLight = rayleighScattering.add(mieScattering).mul(intensityPhase);
+
+    // --- AIRGLOW ---
+    // v goes from 0 at R=10.2 to ~0.197 at R=10
+    // Narrow green band at top (low v):
+    const greenBand = smoothstep(0.06, 0.02, v).mul(smoothstep(0.0, 0.04, v));
+    // Faint blue band lower down (higher v):
+    const blueBand = smoothstep(0.15, 0.05, v).mul(smoothstep(0.03, 0.1, v));
+    
+    const airglowLight = airglowColorUniform.mul(greenBand).mul(4.0)
+        .add(vec3(0.2, 0.3, 0.6).mul(blueBand).mul(1.5))
+        .mul(intensityPhase);
+        
+    const finalScattering = scatteredLight.mul(opticalDepth);
+    const finalAirglow = airglowLight.add(finalScattering.mul(0.1));
+
+    // Outer atmosphere adds scattered light
+    atmosMaterial.colorNode = mix(finalScattering, finalAirglow, atmosModeUniform);
+    
+    const atmosHigh = new THREE.Mesh(atmosGeoHigh, atmosMaterial);
+    const atmosMed = new THREE.Mesh(atmosGeoMed, atmosMaterial);
+    const atmosLow = new THREE.Mesh(atmosGeoLow, atmosMaterial);
+
+    // 4. Atmosphere (Inner surface glow on Earth)
+    // A thin localized front-faced glow that sits right on the earth's surface
+    // to blend the silhouette into the outer halo.
+    const innerAtmosGeoHigh = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
+    const innerAtmosGeoMed = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)));
+    const innerAtmosGeoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)), Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)));
+    const innerAtmosMaterial = new MeshBasicNodeMaterial();
+    innerAtmosMaterial.transparent = true;
+    innerAtmosMaterial.side = THREE.FrontSide;
+    innerAtmosMaterial.depthWrite = false;
+    innerAtmosMaterial.blending = THREE.AdditiveBlending;
+
+    const viewDir = normalize(cameraPosition.sub(positionWorld));
+    const invDot = dot(viewDir, worldNormal).clamp(0.0, 1.0).oneMinus(); 
+    
+    // Concentrate at the rim of the earth
+    const innerOpticalDepth = pow(invDot.clamp(0.0001, 1.0), 6.0).mul(1.5);
+    
+    // For the inner glow, mix standard scattering with a tint of the airglow color
+    const innerFinalScattering = scatteredLight.mul(innerOpticalDepth);
+    const innerFinalAirglow = innerFinalScattering.mul(0.5).add(airglowColorUniform.mul(innerOpticalDepth).mul(0.5).mul(intensityPhase));
+    
+    innerAtmosMaterial.colorNode = mix(innerFinalScattering, innerFinalAirglow, atmosModeUniform);
+
+    
+    const innerAtmosHigh = new THREE.Mesh(innerAtmosGeoHigh, innerAtmosMaterial);
+    const innerAtmosMed = new THREE.Mesh(innerAtmosGeoMed, innerAtmosMaterial);
+    const innerAtmosLow = new THREE.Mesh(innerAtmosGeoLow, innerAtmosMaterial);
+
+    const highGroup = new THREE.Group();
+    highGroup.add(earthHigh, cloudsHigh, atmosHigh, innerAtmosHigh);
+
+    const medGroup = new THREE.Group();
+    medGroup.add(earthMed, cloudsMed, atmosMed, innerAtmosMed);
+
+    const lowGroup = new THREE.Group();
+    lowGroup.add(earthLow, cloudsLow, atmosLow, innerAtmosLow);
+
+    const lod = new THREE.LOD();
+    lod.addLevel(highGroup, 0);
+    lod.addLevel(medGroup, 25);
+    lod.addLevel(lowGroup, 55);
+
+    group.add(lod);
+
+    return group;
+}

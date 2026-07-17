@@ -1,0 +1,710 @@
+import GUI from "lil-gui";
+import * as THREE from "three";
+import { CONSTANTS } from "../constants";
+
+export interface GuiOptions {
+  cgSettings: {
+    contrast: number;
+    saturation: number;
+    blackLevel: number;
+    blueGreenBoost: number;
+  };
+  cgUniforms: {
+    contrast: any;
+    saturation: any;
+    blackLevel: any;
+    blueGreenBoost: any;
+  };
+  caSettings: { enabled: boolean; strength: number; scale: number };
+  caUniforms: { strength: any; scale: any };
+  filmSettings: { enabled: boolean; intensity: number };
+  filmUniforms: { intensity: any };
+  vignetteSettings: { enabled: boolean; darkness: number; offset: number };
+  vignetteUniforms: { darkness: any; offset: any };
+  moonSettings: {
+    enabled: boolean;
+    speed: number;
+    distance: number;
+    inclination: number;
+    displacementScale: number;
+    illumination: number;
+    angle: number;
+  };
+  moonMesh: THREE.Object3D;
+  flareSettings: { enabled: boolean; intensity: number };
+  anamorphicSettings: {
+    enabled: boolean;
+    intensity: number;
+    thickness: number;
+    size: number;
+    color: number;
+    innerFade: number;
+    outerFade: number;
+  };
+  bloomPass: any;
+  bloomSettings: {
+    enabled: boolean;
+    strength: number;
+    radius: number;
+    threshold: number;
+  };
+  earth: THREE.Group;
+  controls: any;
+  camera: THREE.PerspectiveCamera;
+  scene: THREE.Scene;
+  directionalLight: THREE.DirectionalLight;
+  sunMaterial: THREE.MeshBasicMaterial;
+  sunSettings: {
+    autoRotate: boolean;
+    speed: number;
+    inclination: number;
+    angle: number;
+    intensity: number;
+  };
+  debugSettings: { stats: boolean };
+  statsDom: HTMLElement;
+  earthSettings: { trueInclination: boolean; rotationSpeed: number };
+  renderSettings: { resolutionScale: number };
+  onResize: () => void;
+  renderer?: any;
+  canvas?: HTMLCanvasElement;
+  renderPipeline?: any;
+  satelliteSettings?: {
+    enabled: boolean;
+    count: number;
+    size: number;
+    color: number;
+    speedScale: number;
+  };
+  satellitePoints?: THREE.Points | null;
+  backgroundStarsSettings?: {
+    enabled: boolean;
+    count: number;
+    radius: number;
+    seed: number;
+    coolColor: string;
+    warmColor: string;
+  };
+  backgroundStars?: any;
+}
+
+export function buildGui(gui: GUI, options: GuiOptions) {
+  const {
+    cgSettings,
+    cgUniforms,
+    caSettings,
+    caUniforms,
+    filmSettings,
+    filmUniforms,
+    vignetteSettings,
+    vignetteUniforms,
+    moonSettings,
+    moonMesh,
+    flareSettings,
+    anamorphicSettings,
+    bloomPass,
+    bloomSettings,
+    earth,
+    controls,
+    camera,
+    scene,
+    directionalLight,
+    sunMaterial,
+    sunSettings,
+    debugSettings,
+    statsDom,
+    earthSettings,
+    satelliteSettings,
+    satellitePoints,
+    canvas,
+    renderer,
+    renderPipeline,
+    backgroundStarsSettings,
+    backgroundStars,
+  } = options;
+
+  const envGroup = gui.addFolder("Environment Settings");
+
+  const sunFolder = envGroup.addFolder("Sun & Lighting");
+  const sunVisualSettings = {
+    color: directionalLight.color.getHex(),
+  };
+  sunFolder
+    .add(sunSettings, "intensity", 0.0, 10.0)
+    .name("Intensity")
+    .onChange((v: number) => {
+      directionalLight.intensity = v;
+    });
+  sunFolder
+    .addColor(sunVisualSettings, "color")
+    .name("Color")
+    .onChange((c: number) => {
+      directionalLight.color.setHex(c);
+      sunMaterial.color.setHex(c);
+      sunMaterial.color.multiplyScalar(2.0);
+    });
+  sunFolder.add(sunSettings, "autoRotate").name("Auto Rotate");
+  sunFolder.add(sunSettings, "speed", 0.0, 5.0).name("Speed");
+  sunFolder.add(sunSettings, "inclination", -1.0, 1.0).name("Inclination");
+  sunFolder
+    .add(sunSettings, "angle", 0.0, Math.PI * 2.0)
+    .name("Manual Angle")
+    .listen();
+
+  const moonFolder = envGroup.addFolder("Moon");
+  moonFolder
+    .add(moonSettings, "enabled")
+    .name("Show Moon")
+    .onChange((v: boolean) => {
+      moonMesh.visible = v;
+    });
+  moonFolder.add(moonSettings, "speed", 0.0, 0.01).name("Speed");
+  moonFolder.add(moonSettings, "distance", 20, 150).name("Distance");
+  moonFolder.add(moonSettings, "inclination", -1.5, 1.5).name("Inclination");
+  moonFolder
+    .add(moonSettings, "displacementScale", 0.0, 0.2)
+    .name("Displacement")
+    .onChange((v: number) => {
+      const target = moonMesh as any;
+      if (
+        target.material &&
+        target.material.displacementScale !== undefined
+      ) {
+        target.material.displacementScale = v;
+      } else {
+        target.traverse((child: any) => {
+          if (
+            child.material &&
+            child.material.displacementScale !== undefined
+          ) {
+            child.material.displacementScale = v;
+          }
+        });
+      }
+    });
+  moonFolder
+    .add(moonSettings, "illumination", 0.0, 1.0)
+    .name("Illumination")
+    .onChange((v: number) => {
+      const target = moonMesh as any;
+      if (
+        target.material &&
+        target.material.emissiveIntensity !== undefined
+      ) {
+        target.material.emissiveIntensity = v;
+      } else {
+        target.traverse((child: any) => {
+          if (
+            child.material &&
+            child.material.emissiveIntensity !== undefined
+          ) {
+            child.material.emissiveIntensity = v;
+          }
+        });
+      }
+    });
+
+  const skyFolder = envGroup.addFolder("Background");
+  skyFolder
+    .add(scene, "backgroundIntensity", 0.0, 5.0)
+    .name("Skybox Intensity");
+  skyFolder
+    .add(scene.backgroundRotation, "y", 0.0, Math.PI * 2.0)
+    .step(0.01)
+    .name("Yaw / Longitude (Y)");
+  skyFolder
+    .add(scene.backgroundRotation, "x", 0.0, Math.PI * 2.0)
+    .step(0.01)
+    .name("Pitch / Latitude (X)");
+  skyFolder
+    .add(scene.backgroundRotation, "z", 0.0, Math.PI * 2.0)
+    .step(0.01)
+    .name("Roll (Z)");
+
+  if (backgroundStarsSettings && backgroundStars) {
+    skyFolder
+      .add(backgroundStarsSettings, "enabled")
+      .name("Show Generated Stars")
+      .onChange((v: boolean) => {
+        backgroundStars.mesh.visible = v;
+      });
+    skyFolder
+      .add(backgroundStarsSettings, "count", 0, 20000, 100)
+      .name("Generated Stars Count")
+      .onChange((v: number) => {
+        backgroundStars.setCount(v);
+      });
+  }
+
+  const earthGroup = gui.addFolder("Earth Settings");
+
+  earthGroup.add(earthSettings, "trueInclination").name("True Inclination");
+  earthGroup
+    .add(earthSettings, "rotationSpeed", 0.0, 0.01)
+    .name("Rotation Speed")
+    .step(0.0001);
+
+  const atmosFolder = earthGroup.addFolder("Atmosphere");
+  const atmosConfig = {
+    mode: CONSTANTS.GUI.ATMOSPHERE.MODE,
+  };
+  atmosFolder
+    .add(atmosConfig, "mode", ["Scattering", "Airglow"])
+    .name("Mode")
+    .onChange((m: string) => {
+      earth.userData.atmosMode.value = m === "Scattering" ? 0.0 : 1.0;
+    });
+
+  const atmosColors = {
+    rayleigh: earth.userData.rayleighColor.value.getHex(),
+    mie: earth.userData.mieColor.value.getHex(),
+    twilight: earth.userData.twilightColor.value.getHex(),
+    airglow: earth.userData.airglowColor.value.getHex(),
+  };
+  atmosFolder
+    .addColor(atmosColors, "rayleigh")
+    .name("Rayleigh Color")
+    .onChange((c: number) => {
+      earth.userData.rayleighColor.value.setHex(c);
+    });
+  atmosFolder
+    .addColor(atmosColors, "mie")
+    .name("Mie Color")
+    .onChange((c: number) => {
+      earth.userData.mieColor.value.setHex(c);
+    });
+  atmosFolder
+    .addColor(atmosColors, "twilight")
+    .name("Twilight Color")
+    .onChange((c: number) => {
+      earth.userData.twilightColor.value.setHex(c);
+    });
+  atmosFolder
+    .addColor(atmosColors, "airglow")
+    .name("Airglow Color")
+    .onChange((c: number) => {
+      earth.userData.airglowColor.value.setHex(c);
+    });
+  atmosFolder
+    .add(earth.userData.atmosDensity, "value", 0.1, 100.0)
+    .name("Density");
+  atmosFolder
+    .add(earth.userData.rayleighIntensity, "value", 0.0, 5.0)
+    .step(0.1)
+    .name("Rayleigh Intensity");
+  atmosFolder
+    .add(earth.userData.darkSideBrightness, "value", 0.0, 0.5)
+    .step(0.001)
+    .name("Overall Dark Side");
+  atmosFolder
+    .add(earth.userData.cityLights, "value", 0.0, 20.0)
+    .step(0.1)
+    .name("City Lights");
+
+  const shadowFolder = earthGroup.addFolder("Cloud Shadows");
+  const shadowSettings = {
+    color: earth.userData.shadowColor.value.getHex(),
+  };
+  shadowFolder.add(earth.userData.shadowDist, "value", 0, 5).name("Distance");
+  shadowFolder
+    .add(earth.userData.shadowIntensity, "value", 0, 1)
+    .name("Intensity");
+  shadowFolder
+    .addColor(shadowSettings, "color")
+    .name("Color")
+    .onChange((c: number) => {
+      earth.userData.shadowColor.value.setHex(c);
+    });
+
+  const oceanFolder = earthGroup.addFolder("Ocean Settings");
+  oceanFolder
+    .add(earth.userData.waterRoughness, "value", 0.0, 1.0)
+    .name("Water Roughness");
+  oceanFolder
+    .add(earth.userData.waterMetalness, "value", 0.0, 1.0)
+    .name("Water Metalness");
+
+  const terrainFolder = earthGroup.addFolder("Terrain Settings");
+  const terrainSettings = {
+    bumpScale: CONSTANTS.GUI.EARTH.BUMP_SCALE,
+  };
+  terrainFolder
+    .add(terrainSettings, "bumpScale", 0.0, 10.0)
+    .name("Bump Map Scale")
+    .onChange((v: number) => {
+      earth.userData.bumpScale.value.set(v, v);
+    });
+  terrainFolder
+    .add(earth.userData.terrainShadowIntensity, "value", 0.0, 5.0)
+    .name("Self-Shadow Intensity");
+  terrainFolder
+    .add(earth.userData.terrainShadowOffset, "value", 0.0001, 0.01)
+    .name("Self-Shadow Offset");
+
+  if (satelliteSettings) {
+    const satGroup = earthGroup.addFolder("Satellites");
+    
+    satGroup.add(satelliteSettings, "enabled").name("Show Satellites").onChange((val: boolean) => {
+      if (satellitePoints) {
+        satellitePoints.visible = val;
+      }
+    });
+
+    const satColorObj = { color: satelliteSettings.color };
+    satGroup.addColor(satColorObj, "color").name("Color").onChange((val: number) => {
+      if (satellitePoints && satellitePoints.userData.colorUniform) {
+        satellitePoints.userData.colorUniform.value.setHex(val);
+      }
+    });
+
+    satGroup.add(satelliteSettings, "speedScale", 0.0, 5.0).step(0.1).name("Orbit Speed");
+  }
+
+  const postGroup = gui.addFolder("Post Processing");
+
+  const ccFolder = postGroup.addFolder("Color Grading");
+  ccFolder
+    .add(cgSettings, "contrast", 0.5, 2.0)
+    .name("Contrast")
+    .onChange((v: number) => {
+      cgUniforms.contrast.value = v;
+    });
+  ccFolder
+    .add(cgSettings, "saturation", 0.0, 2.0)
+    .name("Saturation")
+    .onChange((v: number) => {
+      cgUniforms.saturation.value = v;
+    });
+  ccFolder
+    .add(cgSettings, "blackLevel", 0.0, 0.5)
+    .name("Black Level")
+    .onChange((v: number) => {
+      cgUniforms.blackLevel.value = v;
+    });
+  ccFolder
+    .add(cgSettings, "blueGreenBoost", 0.0, 1.0)
+    .name("Blue/Green Boost")
+    .onChange((v: number) => {
+      cgUniforms.blueGreenBoost.value = v;
+    });
+
+  const flareFolder = postGroup.addFolder("Lens Flare");
+  flareFolder.add(flareSettings, "enabled").name("Enabled");
+  flareFolder.add(flareSettings, "intensity", 0.0, 1.0).name("Intensity");
+
+  const anaFolder = postGroup.addFolder("Anamorphic Eclipse Flare");
+  anaFolder.add(anamorphicSettings, "enabled").name("Enabled");
+  anaFolder.add(anamorphicSettings, "intensity", 0.0, 2.0).name("Intensity");
+  anaFolder.add(anamorphicSettings, "thickness", 0.1, 2.0).name("Thickness");
+  anaFolder.add(anamorphicSettings, "size", 0.1, 5.0).name("Size");
+  anaFolder
+    .add(anamorphicSettings, "innerFade", 0.001, 1.0)
+    .name("Inner Fade")
+    .step(0.001);
+  anaFolder
+    .add(anamorphicSettings, "outerFade", 0.01, 1.0)
+    .name("Outer Fade")
+    .step(0.01);
+  const aColor = { hex: anamorphicSettings.color };
+  anaFolder
+    .addColor(aColor, "hex")
+    .name("Color")
+    .onChange((c: number) => {
+      anamorphicSettings.color = c;
+    });
+
+  const caFolder = postGroup.addFolder("Chromatic Aberration");
+  caFolder
+    .add(caSettings, "enabled")
+    .name("Enabled")
+    .onChange((v: boolean) => {
+      // Toggle by setting strength to 0.0 when disabled
+      caUniforms.strength.value = v ? caSettings.strength : 0.0;
+    });
+  caFolder
+    .add(caSettings, "strength", 0.0, 5.0)
+    .name("Strength")
+    .onChange((v: number) => {
+      if (caSettings.enabled) caUniforms.strength.value = v;
+    });
+  caFolder
+    .add(caSettings, "scale", 0.5, 2.0)
+    .name("Scale")
+    .onChange((v: number) => {
+      caUniforms.scale.value = v;
+    });
+
+  const filmFolder = postGroup.addFolder("Film Grain");
+  filmFolder
+    .add(filmSettings, "enabled")
+    .name("Enabled")
+    .onChange((v: boolean) => {
+      filmUniforms.intensity.value = v ? filmSettings.intensity : 0.0;
+    });
+  filmFolder
+    .add(filmSettings, "intensity", 0.0, 1.0)
+    .name("Intensity")
+    .onChange((v: number) => {
+      if (filmSettings.enabled) filmUniforms.intensity.value = v;
+    });
+
+  const vignetteFolder = postGroup.addFolder("Vignette");
+  vignetteFolder
+    .add(vignetteSettings, "enabled")
+    .name("Enabled")
+    .onChange((v: boolean) => {
+      vignetteUniforms.darkness.value = v ? vignetteSettings.darkness : 0.0;
+    });
+  vignetteFolder
+    .add(vignetteSettings, "darkness", 0.0, 5.0)
+    .step(0.1)
+    .name("Darkness")
+    .onChange((v: number) => {
+      if (vignetteSettings.enabled) vignetteUniforms.darkness.value = v;
+    });
+  vignetteFolder
+    .add(vignetteSettings, "offset", 0.0, 2.0)
+    .step(0.01)
+    .name("Offset")
+    .onChange((v: number) => {
+      vignetteUniforms.offset.value = v;
+    });
+
+  const bloomFolder = postGroup.addFolder("Bloom");
+  bloomFolder
+    .add(bloomSettings, "enabled")
+    .name("Enabled")
+    .onChange((v: boolean) => {
+      bloomPass.strength.value = v ? bloomSettings.strength : 0.0;
+    });
+  bloomFolder
+    .add(bloomSettings, "strength", 0, 5)
+    .name("Strength")
+    .onChange((v: number) => {
+      if (bloomSettings.enabled) bloomPass.strength.value = v;
+    });
+  bloomFolder.add(bloomPass.radius, "value", 0, 1).name("Radius");
+  bloomFolder.add(bloomPass.threshold, "value", 0, 1).name("Threshold");
+
+  const cameraFolder = gui.addFolder("Camera");
+  cameraFolder.add(controls, "autoRotate").name("Auto Rotate");
+  cameraFolder.add(controls, "autoRotateSpeed", 0.1, 5.0).name("Rotate Speed");
+
+  // Create a temporary object for camera position fields to be able to use .listen()
+  // without allowing manual typing to break orbit controls badly, or we can just let them edit the camera pos.
+  // However, OrbitControls overrides position based on its target.
+  // To safely update camera position we should edit it but we also need to let it read from camera.position.
+
+  // Instead of directly modifying camera.position which gets overridden by OrbitControls if target is not updated properly,
+  // it's fine for simple display using listen() directly on camera.position
+  const posFolder = cameraFolder.addFolder("Position (Current)");
+  posFolder.add(camera.position, "x").name("X").decimals(2).listen().disable();
+  posFolder.add(camera.position, "y").name("Y").decimals(2).listen().disable();
+  posFolder.add(camera.position, "z").name("Z").decimals(2).listen().disable();
+
+  const targetFolder = cameraFolder.addFolder("Target (Current)");
+  targetFolder
+    .add(controls.target, "x")
+    .name("X")
+    .decimals(2)
+    .listen()
+    .disable();
+  targetFolder
+    .add(controls.target, "y")
+    .name("Y")
+    .decimals(2)
+    .listen()
+    .disable();
+  targetFolder
+    .add(controls.target, "z")
+    .name("Z")
+    .decimals(2)
+    .listen()
+    .disable();
+
+  const camActions = {
+    reset: () => {
+      options.controls.reset();
+    },
+  };
+  cameraFolder.add(camActions, "reset").name("Reset View");
+
+  const debugFolder = gui.addFolder("Display & Debug");
+  debugFolder
+    .add(debugSettings, "stats")
+    .name("Show Stats")
+    .onChange((v: boolean) => {
+      statsDom.style.display = v ? "block" : "none";
+    });
+  debugFolder
+    .add(options.renderSettings, "resolutionScale", 0.1, 2.0)
+    .step(0.01)
+    .name("Resolution Scale")
+    .onChange(() => options.onResize());
+
+  const debugActions = {
+    exportConstants: () => {
+      const exported = {
+        SHOW: true,
+        COLOR_GRADING: {
+          CONTRAST: cgSettings.contrast,
+          SATURATION: cgSettings.saturation,
+          BLACK_LEVEL: cgSettings.blackLevel,
+          BLUE_GREEN_BOOST: cgSettings.blueGreenBoost,
+        },
+        MOON: {
+          ENABLED: moonSettings.enabled,
+          SPEED: moonSettings.speed,
+          DISTANCE: moonSettings.distance,
+          INCLINATION: moonSettings.inclination,
+        },
+        LENS_FLARE: {
+          ENABLED: flareSettings.enabled,
+          INTENSITY: flareSettings.intensity,
+        },
+        ANAMORPHIC: {
+          ENABLED: anamorphicSettings.enabled,
+          INTENSITY: anamorphicSettings.intensity,
+          THICKNESS: anamorphicSettings.thickness,
+          SIZE: anamorphicSettings.size,
+          COLOR: anamorphicSettings.color,
+          INNER_FADE: anamorphicSettings.innerFade,
+          OUTER_FADE: anamorphicSettings.outerFade,
+        },
+        BLOOM: {
+          ENABLED: bloomSettings.enabled,
+          STRENGTH: bloomSettings.strength,
+          RADIUS: bloomPass.radius.value,
+          THRESHOLD: bloomPass.threshold.value,
+        },
+        VIGNETTE: {
+          ENABLED: vignetteSettings.enabled,
+          DARKNESS: vignetteSettings.darkness,
+          OFFSET: vignetteSettings.offset,
+        },
+        CHROMATIC_ABERRATION: {
+          ENABLED: caSettings.enabled,
+          STRENGTH: caSettings.strength,
+          SCALE: caSettings.scale,
+        },
+        FILM_GRAIN: {
+          ENABLED: filmSettings.enabled,
+          INTENSITY: filmSettings.intensity,
+        },
+        ATMOSPHERE: {
+          MODE:
+            earth.userData.atmosMode.value === 0.0 ? "Scattering" : "Airglow",
+          DENSITY: earth.userData.atmosDensity.value,
+          RAYLEIGH_COLOR: earth.userData.rayleighColor.value.getHex(),
+          MIE_COLOR: earth.userData.mieColor.value.getHex(),
+          TWILIGHT_COLOR: earth.userData.twilightColor.value.getHex(),
+          AIRGLOW_COLOR: earth.userData.airglowColor.value.getHex(),
+        },
+        CLOUD_SHADOWS: {
+          DISTANCE: earth.userData.shadowDist.value,
+          INTENSITY: earth.userData.shadowIntensity.value,
+          COLOR: earth.userData.shadowColor.value.getHex(),
+        },
+        OCEAN: {
+          ROUGHNESS: earth.userData.waterRoughness.value,
+          METALNESS: earth.userData.waterMetalness.value,
+        },
+        EARTH: {
+          ROTATION_SPEED: earthSettings.rotationSpeed,
+          BUMP_SCALE: terrainSettings.bumpScale,
+          TERRAIN_SHADOW_INTENSITY: earth.userData.terrainShadowIntensity.value,
+          TERRAIN_SHADOW_OFFSET: earth.userData.terrainShadowOffset.value,
+          TRUE_INCLINATION: earthSettings.trueInclination,
+        },
+        CAMERA: {
+          POSITION: {
+            x: camera.position.x,
+            y: camera.position.y,
+            z: camera.position.z,
+          },
+          TARGET: {
+            x: controls.target.x,
+            y: controls.target.y,
+            z: controls.target.z,
+          },
+          AUTO_ROTATE: controls.autoRotate,
+          AUTO_ROTATE_SPEED: controls.autoRotateSpeed,
+        },
+        ENVIRONMENT: {
+          SKYBOX_INTENSITY: scene.backgroundIntensity,
+          SKYBOX_AZIMUTH: scene.backgroundRotation.y,
+          SKYBOX_PITCH: scene.backgroundRotation.x,
+          SKYBOX_ROLL: scene.backgroundRotation.z,
+          DARK_SIDE_BRIGHTNESS: earth.userData.darkSideBrightness.value,
+          CITY_LIGHTS: earth.userData.cityLights.value,
+        },
+        DEBUG: {
+          STATS: debugSettings.stats,
+          RESOLUTION_SCALE: options.renderSettings.resolutionScale,
+        },
+        SUN: {
+          INTENSITY: sunSettings.intensity,
+          COLOR: directionalLight.color.getHex(),
+          AUTO_ROTATE: sunSettings.autoRotate,
+          SPEED: sunSettings.speed,
+          INCLINATION: sunSettings.inclination,
+        },
+      };
+
+      const formatHex = (key: string, val: any) => {
+        if (typeof val === "number" && key.includes("COLOR")) {
+          return `0x${val.toString(16).padStart(6, "0")}`;
+        }
+        return val;
+      };
+
+      let jsonStr = "GUI: " + JSON.stringify(exported, formatHex, 4);
+      jsonStr = jsonStr.replace(/"(0x[0-9a-fA-F]+)"/g, "$1");
+
+      navigator.clipboard
+        .writeText(jsonStr)
+        .then(() => {
+          console.log("Exported CONSTANTS.GUI:\n", jsonStr);
+        })
+        .catch((err) => {
+          console.error("Clipboard copy failed:", err);
+          console.log("Exported CONSTANTS.GUI:\n", jsonStr);
+        });
+    },
+    takeScreenshot: () => {
+      if (!canvas || !renderer || !renderPipeline) {
+        console.warn("Screenshot components not fully initialized.");
+        return;
+      }
+      
+      const oldScale = options.renderSettings.resolutionScale;
+      const parentWidth = canvas.parentElement ? canvas.parentElement.clientWidth : canvas.width;
+      const dpr = window.devicePixelRatio || 1;
+      const currentWidthWithDpr = parentWidth * Math.min(dpr, 2);
+      
+      // Calculate multiplier to target a high quality 4K resolution (approx 3840px width)
+      const scaleFactor = Math.min(6.0, Math.max(2.0, 3840 / currentWidthWithDpr));
+      
+      options.renderSettings.resolutionScale = scaleFactor;
+      options.onResize();
+      
+      // Render frame with target resolution
+      renderPipeline.render();
+      
+      // Immediately extract data URL before WebGPU backbuffer is presented/cleared
+      const dataUrl = canvas.toDataURL("image/png");
+      
+      options.renderSettings.resolutionScale = oldScale;
+      options.onResize();
+      
+      const link = document.createElement("a");
+      const finalWidth = Math.round(parentWidth * Math.min(dpr, 2) * scaleFactor);
+      const finalHeight = Math.round(canvas.height);
+      link.download = `earth_atmosphere_screenshot_${finalWidth}x${finalHeight}.png`;
+      link.href = dataUrl;
+      link.click();
+    },
+  };
+  debugFolder.add(debugActions, "exportConstants").name("Copy GUI Constants");
+  debugFolder.add(debugActions, "takeScreenshot").name("Take 4K Screenshot");
+}

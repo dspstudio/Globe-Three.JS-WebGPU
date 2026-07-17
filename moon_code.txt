@@ -1,0 +1,37 @@
+import * as THREE from 'three';
+import { CONSTANTS } from '../constants';
+
+export function updateMoon(moonMesh: THREE.Mesh, sunMesh: THREE.Mesh, camera: THREE.Camera, settings: { angle: number, distance: number, inclination: number }) {
+    const ma = settings.angle;
+    const mi = settings.inclination;
+    const dist = settings.distance;
+    
+    moonMesh.position.set(
+        Math.cos(ma) * dist,
+        Math.sin(mi) * dist,
+        Math.sin(ma) * Math.cos(mi) * dist
+    );
+    
+    // Moon is tidally locked, roughly looking at Earth (0,0,0)
+    moonMesh.lookAt(0, 0, 0);
+}
+
+export async function createMoon(textureLoader: THREE.TextureLoader) {
+    const radius = 2.73; // Moon radius relative to Earth 10
+    const geometry = new THREE.SphereGeometry(radius, CONSTANTS.SEGMENTS / 2, CONSTANTS.SEGMENTS / 2);
+    
+    const map = await textureLoader.loadAsync(CONSTANTS.TEXTURES.MOON_ALBEDO);
+    map.colorSpace = THREE.SRGBColorSpace;
+    
+    const material = new THREE.MeshStandardMaterial({
+        map: map,
+        roughness: 1.0,
+        metalness: 0.0
+    });
+    
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    return mesh;
+}
