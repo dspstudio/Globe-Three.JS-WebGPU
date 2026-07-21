@@ -1,3 +1,5 @@
+import { LocationInfo } from "./types";
+
 // Check device capability
 export const isMobileOrTablet = () => {
   if (typeof window === "undefined") return false;
@@ -128,7 +130,7 @@ export const CONSTANTS = {
       METALNESS: 0.05,
     },
     EARTH: {
-      ROTATION_SPEED: 0.0005,
+      ROTATION_SPEED: 0.0001,
       BUMP_SCALE: 5.0,
       TERRAIN_SHADOW_INTENSITY: 1.0,
       TERRAIN_SHADOW_OFFSET: 0.002,
@@ -175,5 +177,107 @@ export const CONSTANTS = {
       COOL_COLOR: "#9db6ff",
       WARM_COLOR: "#ffd9b0",
     },
+    CITIES: {
+      ENABLED: false,
+    },
   },
 };
+
+export const CINEMATIC_LOCATIONS: LocationInfo[] = [
+  {
+    id: "bucharest",
+    name: "Bucharest, Romania",
+    lat: 44.4268,
+    lng: 26.1025
+  },
+  {
+    id: "london",
+    name: "London, United Kingdom",
+    lat: 51.5074,
+    lng: -0.1278
+  },
+  {
+    id: "paris",
+    name: "Paris, France",
+    lat: 48.8566,
+    lng: 2.3522
+  },
+  {
+    id: "berlin",
+    name: "Berlin, Germany",
+    lat: 52.52,
+    lng: 13.405
+  },
+  {
+    id: "rome",
+    name: "Rome, Italy",
+    lat: 41.9028,
+    lng: 12.4964
+  },
+  {
+    id: "madrid",
+    name: "Madrid, Spain",
+    lat: 40.4168,
+    lng: -3.7038
+  },
+  {
+    id: "new_york",
+    name: "New York, USA",
+    lat: 40.7128,
+    lng: -74.0060
+  },
+  {
+    id: "los_angeles",
+    name: "Los Angeles, USA",
+    lat: 34.0522,
+    lng: -118.2437
+  },
+  {
+    id: "chicago",
+    name: "Chicago, USA",
+    lat: 41.8781,
+    lng: -87.6298
+  },
+  {
+    id: "tokyo",
+    name: "Tokyo, Japan",
+    lat: 35.6762,
+    lng: 139.6503
+  },
+  {
+    id: "sydney",
+    name: "Sydney, Australia",
+    lat: -33.8688,
+    lng: 151.2093
+  },
+  {
+    id: "shanghai",
+    name: "Shanghai, China",
+    lat: 31.2304,
+    lng: 121.4737
+  },
+  {
+    id: "dubai",
+    name: "Dubai, UAE",
+    lat: 25.2048,
+    lng: 55.2708
+  },
+  {
+    id: "vienna",
+    name: "Vienna, Austria",
+    lat: 48.2082,
+    lng: 16.3738
+  },
+  {
+    id: "athens",
+    name: "Athens, Greece",
+    lat: 37.9838,
+    lng: 23.7275
+  },
+  {
+    id: "amsterdam",
+    name: "Amsterdam, Netherlands",
+    lat: 52.3676,
+    lng: 4.9041
+  }
+];

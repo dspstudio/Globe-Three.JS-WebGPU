@@ -18,7 +18,7 @@ import { chromaticAberration } from "three/examples/jsm/tsl/display/ChromaticAbe
 import { film } from "three/examples/jsm/tsl/display/FilmNode.js";
 import GUI from "lil-gui";
 import Stats from "three/examples/jsm/libs/stats.module.js";
-import { CONSTANTS } from "../constants";
+import { CONSTANTS, CINEMATIC_LOCATIONS } from "../constants";
 import { createEarth } from "./Earth";
 import { createMoon, updateMoon } from "./Moon";
 import {
@@ -30,6 +30,7 @@ import {
 import { colorGradeWgsl, vignetteWgsl } from "./ColorGrading";
 import { buildGui } from "./GUIBuilder";
 import { BackgroundStars } from "./BackgroundStars";
+import { ProjectedLocation } from "../types";
 
 export class Engine {
   private canvas: HTMLCanvasElement;
@@ -119,6 +120,14 @@ export class Engine {
     coolColor: string;
     warmColor: string;
   };
+  private citiesSettings!: {
+    enabled: boolean;
+  };
+
+  private earthGroup: THREE.Group | null = null;
+  private locationAnchors: Map<string, THREE.Object3D> = new Map();
+  public onLocationsUpdate: ((locations: ProjectedLocation[]) => void) | null = null;
+  public focusTargetAnchorId: string | null = null;
 
   private isDisposed: boolean = false;
 
@@ -180,6 +189,10 @@ export class Engine {
     );
     this.controls.update();
     this.controls.saveState();
+
+    this.controls.addEventListener("start", () => {
+      this.focusTargetAnchorId = null;
+    });
 
     this.textureLoader = new THREE.TextureLoader();
 
@@ -263,6 +276,8 @@ export class Engine {
     );
     if (this.isDisposed) return;
     this.root.add(earth);
+    this.earthGroup = earth;
+    this.initLocations();
 
     if (onProgress) onProgress("Building Render Pipeline");
     const { RenderPipeline } = await import("three/webgpu");
@@ -459,6 +474,10 @@ export class Engine {
     this.backgroundStars.mesh.visible = this.backgroundStarsSettings.enabled;
     this.scene.add(this.backgroundStars.mesh);
 
+    this.citiesSettings = {
+      enabled: CONSTANTS.GUI.CITIES?.ENABLED !== undefined ? CONSTANTS.GUI.CITIES.ENABLED : false,
+    };
+
     this.gui = new GUI({ title: "Engine Settings" });
     if (!CONSTANTS.GUI.SHOW) {
       this.gui.hide();
@@ -514,6 +533,7 @@ export class Engine {
       satellitePoints: this.satellitePoints,
       backgroundStarsSettings: this.backgroundStarsSettings,
       backgroundStars: this.backgroundStars,
+      citiesSettings: this.citiesSettings,
     });
 
     this.handleResize();
@@ -552,6 +572,28 @@ export class Engine {
 
   private animate = () => {
     this.animationId = requestAnimationFrame(this.animate);
+
+    // Smooth camera transition to focused anchor
+    if (this.focusTargetAnchorId) {
+      const anchor = this.locationAnchors.get(this.focusTargetAnchorId);
+      if (anchor) {
+        const tempV = new THREE.Vector3();
+        anchor.getWorldPosition(tempV);
+        const dirToAnchor = tempV.clone().normalize();
+        
+        const currentDistance = this.camera.position.length();
+        const targetDistance = Math.max(CONSTANTS.EARTH_RADIUS * 1.5, Math.min(currentDistance, CONSTANTS.EARTH_RADIUS * 2.5));
+        
+        const targetPos = dirToAnchor.multiplyScalar(targetDistance);
+        this.camera.position.lerp(targetPos, 0.08);
+        
+        if (this.camera.position.distanceTo(targetPos) < 0.05) {
+          this.camera.position.copy(targetPos);
+          this.focusTargetAnchorId = null;
+        }
+      }
+    }
+
     this.controls.update();
 
     // Update Sun Position
@@ -647,6 +689,8 @@ export class Engine {
       this.anamorphicIntensityUniform,
       this.anamorphicSettings,
     );
+
+    this.updateProjectedLocations();
 
     if (this.renderer && this.renderPipeline) {
       this.renderPipeline.render();
@@ -818,5 +862,89 @@ export class Engine {
     if (this.backgroundStars) {
       this.backgroundStars.dispose();
     }
+  }
+
+  private initLocations() {
+    if (!this.earthGroup) return;
+    const radius = CONSTANTS.EARTH_RADIUS + 0.1; // Slightly float above surface
+
+    for (const loc of CINEMATIC_LOCATIONS) {
+      const phi = (90 - loc.lat) * (Math.PI / 180);
+      const theta = (loc.lng + 180) * (Math.PI / 180);
+
+      const x = -radius * Math.cos(theta) * Math.sin(phi);
+      const y = radius * Math.cos(phi);
+      const z = radius * Math.sin(theta) * Math.sin(phi);
+
+      const anchor = new THREE.Object3D();
+      anchor.position.set(x, y, z);
+      this.earthGroup.add(anchor);
+      this.locationAnchors.set(loc.id, anchor);
+    }
+  }
+
+  private updateProjectedLocations() {
+    if (!this.onLocationsUpdate || this.locationAnchors.size === 0) return;
+
+    if (this.citiesSettings && !this.citiesSettings.enabled) {
+      this.onLocationsUpdate([]);
+      return;
+    }
+
+    const projected: ProjectedLocation[] = [];
+    const tempV = new THREE.Vector3();
+    const earthCenter = new THREE.Vector3(0, 0, 0);
+
+    const width = this.canvas.parentElement ? this.canvas.parentElement.clientWidth : window.innerWidth;
+    const height = this.canvas.parentElement ? this.canvas.parentElement.clientHeight : window.innerHeight;
+
+    const dirToCamera = this.camera.position.clone().sub(earthCenter).normalize();
+
+    for (const [id, anchor] of this.locationAnchors.entries()) {
+      anchor.getWorldPosition(tempV);
+
+      // Distance check is useful to make sure they scale nicely
+      const distanceToCamera = this.camera.position.distanceTo(tempV);
+
+      // Check horizon visibility based on dot product of anchor direction and camera direction
+      const dirToAnchor = tempV.clone().sub(earthCenter).normalize();
+      const dot = dirToAnchor.dot(dirToCamera);
+
+      // Dot product > 0.0 means front-facing. We transition opacity down as it reaches the limb.
+      const visible = dot > -0.05;
+      let opacity = 0.0;
+      if (dot > 0.0) {
+        opacity = Math.min(1.0, dot / 0.2); // Fades from dot=0.2 to dot=0
+      }
+
+      // Project 3D vector to 2D NDC
+      tempV.project(this.camera);
+
+      // Convert NDC to screen pixels
+      const x = (tempV.x * 0.5 + 0.5) * width;
+      const y = (tempV.y * -0.5 + 0.5) * height;
+
+      // Find original location info
+      const info = CINEMATIC_LOCATIONS.find((l) => l.id === id);
+      if (info) {
+        projected.push({
+          id,
+          name: info.name,
+          lat: info.lat,
+          lng: info.lng,
+          x,
+          y,
+          visible,
+          opacity,
+          distanceToCamera,
+        });
+      }
+    }
+
+    this.onLocationsUpdate(projected);
+  }
+
+  public focusOnLocation(id: string) {
+    this.focusTargetAnchorId = id;
   }
 }

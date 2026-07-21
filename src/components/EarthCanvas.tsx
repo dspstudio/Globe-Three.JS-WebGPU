@@ -1,14 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Engine } from '../engine/Engine';
+import { ProjectedLocation } from '../types';
 
 export interface EarthCanvasProps {
     onLoad: () => void;
     onProgress: (msg: string) => void;
+    onLocationsUpdate?: (locations: ProjectedLocation[]) => void;
 }
 
-export function EarthCanvas({ onLoad, onProgress }: EarthCanvasProps) {
+export function EarthCanvas({ onLoad, onProgress, onLocationsUpdate }: EarthCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<Engine | null>(null);
+    
+    // Store callback in a mutable ref to prevent the engine initialization useEffect 
+    // from triggering again when onLocationsUpdate changes.
+    const onLocationsUpdateRef = useRef(onLocationsUpdate);
+    useEffect(() => {
+        onLocationsUpdateRef.current = onLocationsUpdate;
+    }, [onLocationsUpdate]);
 
     useEffect(() => {
         if (!canvasRef.current) return;
@@ -16,6 +25,13 @@ export function EarthCanvas({ onLoad, onProgress }: EarthCanvasProps) {
         let active = true;
 
         engineRef.current = new Engine(canvasRef.current);
+
+        engineRef.current.onLocationsUpdate = (locations) => {
+            if (active && onLocationsUpdateRef.current) {
+                onLocationsUpdateRef.current(locations);
+            }
+        };
+
         engineRef.current.init((msg) => {
             if (active) onProgress(msg);
         }).then(() => {
@@ -32,7 +48,7 @@ export function EarthCanvas({ onLoad, onProgress }: EarthCanvasProps) {
                 engineRef.current = null;
             }
         };
-    }, [onLoad]);
+    }, [onLoad, onProgress]);
 
     return (
         <div className="w-full h-full relative bg-neutral-950 overflow-hidden">

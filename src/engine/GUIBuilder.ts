@@ -86,6 +86,9 @@ export interface GuiOptions {
     warmColor: string;
   };
   backgroundStars?: any;
+  citiesSettings?: {
+    enabled: boolean;
+  };
 }
 
 export function buildGui(gui: GUI, options: GuiOptions) {
@@ -121,6 +124,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     renderPipeline,
     backgroundStarsSettings,
     backgroundStars,
+    citiesSettings,
   } = options;
 
   const envGroup = gui.addFolder("Environment Settings");
@@ -237,6 +241,10 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   }
 
   const earthGroup = gui.addFolder("Earth Settings");
+
+  if (citiesSettings) {
+    earthGroup.add(citiesSettings, "enabled").name("Show Cities");
+  }
 
   earthGroup.add(earthSettings, "trueInclination").name("True Inclination");
   earthGroup
