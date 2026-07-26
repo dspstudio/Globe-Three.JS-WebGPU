@@ -143,7 +143,7 @@ export const CONSTANTS = {
       AIRGLOW_COLOR: 0x44ff55,
     },
     CLOUD_SHADOWS: {
-      DISTANCE: 1.2,
+      DISTANCE: 0.08,
       INTENSITY: 0.8,
       COLOR: 0x334059,
     },
@@ -157,6 +157,8 @@ export const CONSTANTS = {
       TERRAIN_SHADOW_INTENSITY: 1.0,
       TERRAIN_SHADOW_OFFSET: 0.002,
       TRUE_INCLINATION: false,
+      CUTAWAY: 0.0, // 0.0 = Whole Earth, 1.0 = Cut in half showing inner layers
+      CUTAWAY_ANIMATE: false,
     },
     CAMERA: {
       FOV: 45,

@@ -284,6 +284,30 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     .name("Rotation Speed")
     .step(0.0001);
 
+  if (earth.userData.cutawayProgress) {
+    const cutawayFolder = earthGroup.addFolder("Cross-Section (Inner Core)");
+    const cutawayConfig = {
+      progress: earth.userData.cutawayProgress.value,
+      toggleCutaway: () => {
+        const current = earth.userData.cutawayProgress.value;
+        const target = current > 0.5 ? 0.0 : 1.0;
+        earth.userData.cutawayProgress.value = target;
+        cutawayConfig.progress = target;
+        gui.controllersRecursive().forEach((c) => c.updateDisplay());
+      }
+    };
+
+    cutawayFolder
+      .add(cutawayConfig, "progress", 0.0, 1.0, 0.01)
+      .name("Cutaway Depth")
+      .onChange((v: number) => {
+        earth.userData.cutawayProgress.value = v;
+      });
+    cutawayFolder
+      .add(cutawayConfig, "toggleCutaway")
+      .name("Toggle Cutaway");
+  }
+
   const atmosFolder = earthGroup.addFolder("Atmosphere");
   const atmosConfig = {
     mode: CONSTANTS.GUI.ATMOSPHERE.MODE,
@@ -345,7 +369,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   const shadowSettings = {
     color: earth.userData.shadowColor.value.getHex(),
   };
-  shadowFolder.add(earth.userData.shadowDist, "value", 0, 5).name("Distance");
+  shadowFolder.add(earth.userData.shadowDist, "value", 0.01, 0.5, 0.005).name("Altitude Offset");
   shadowFolder
     .add(earth.userData.shadowIntensity, "value", 0, 1)
     .name("Intensity");

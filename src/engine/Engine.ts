@@ -296,6 +296,11 @@ export class Engine {
     if (this.isDisposed) return;
     this.root.add(earth);
     this.earthGroup = earth;
+
+    // Listen for UI event to toggle or set cutaway
+    window.addEventListener('toggle-cutaway', this.handleToggleCutaway);
+    window.addEventListener('set-cutaway', this.handleSetCutaway as any);
+
     this.countryBorders = new CountryBorders(this.earthGroup);
     if (CONSTANTS.GUI.COUNTRY_BORDERS.ENABLED) {
       await this.countryBorders.init();
@@ -672,6 +677,10 @@ export class Engine {
       }
     });
 
+    if (this.earthGroup && this.earthGroup.userData.cloudRotationY) {
+      this.earthGroup.userData.cloudRotationY.value += this.earthSettings.rotationSpeed * 0.2;
+    }
+
     if (this.moonSettings.enabled) {
       this.moonSettings.angle += this.moonSettings.speed;
     }
@@ -887,10 +896,46 @@ export class Engine {
     this.animate();
   }
 
+  private handleToggleCutaway = () => {
+    this.toggleCutaway();
+  };
+
+  private handleSetCutaway = (e: CustomEvent<{ value: number }>) => {
+    if (e && e.detail && typeof e.detail.value === 'number') {
+      this.setCutawayProgress(e.detail.value);
+    }
+  };
+
+  public toggleCutaway(): number {
+    if (this.earthGroup && this.earthGroup.userData.cutawayProgress) {
+      const current = this.earthGroup.userData.cutawayProgress.value;
+      const target = current > 0.5 ? 0.0 : 1.0;
+      this.earthGroup.userData.cutawayProgress.value = target;
+      if (this.gui) {
+        this.gui.controllersRecursive().forEach((c) => c.updateDisplay());
+      }
+      window.dispatchEvent(new CustomEvent('cutaway-changed', { detail: { value: target } }));
+      return target;
+    }
+    return 0;
+  }
+
+  public setCutawayProgress(value: number) {
+    if (this.earthGroup && this.earthGroup.userData.cutawayProgress) {
+      this.earthGroup.userData.cutawayProgress.value = value;
+      if (this.gui) {
+        this.gui.controllersRecursive().forEach((c) => c.updateDisplay());
+      }
+      window.dispatchEvent(new CustomEvent('cutaway-changed', { detail: { value } }));
+    }
+  }
+
   public dispose() {
     this.isDisposed = true;
     cancelAnimationFrame(this.animationId);
     window.removeEventListener("resize", this.handleResize);
+    window.removeEventListener("toggle-cutaway", this.handleToggleCutaway);
+    window.removeEventListener("set-cutaway", this.handleSetCutaway as any);
     if (this.gui) {
       this.gui.destroy();
     }

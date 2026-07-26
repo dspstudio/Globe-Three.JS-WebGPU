@@ -1,11 +1,21 @@
 import * as THREE from 'three';
-import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, sub, float, min, bumpMap } from 'three/tsl';
+import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, sub, float, min, bumpMap, Discard, select, Fn, clamp, cos, sin } from 'three/tsl';
 import { MeshStandardNodeMaterial, MeshBasicNodeMaterial, MeshPhysicalNodeMaterial } from 'three/webgpu';
 import { CONSTANTS } from '../constants';
+import { createInnerLayers } from './InnerLayers';
 
 export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: any, moonPosUniform: any, maxAnisotropy: number = 1): Promise<THREE.Group> {
     const group = new THREE.Group();
     
+    // Cutaway uniform and discard node
+    const cutawayProgressUniform = uniform(CONSTANTS.GUI.EARTH.CUTAWAY || 0.0);
+    group.userData.cutawayProgress = cutawayProgressUniform;
+
+    // Crust/Surface peels away first (0.0 -> 0.2 of cutaway slider)
+    const pCrust = clamp(cutawayProgressUniform.div(0.2), float(0.0), float(1.0));
+    const cutX = mix(float(15.0), float(0.0), pCrust);
+    const cutDiscard = positionLocal.x.greaterThan(cutX);
+
     // Load textures
     const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex] = await Promise.all([
         loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
@@ -34,22 +44,38 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const sunDir = sunDirUniform;
     
     // Procedural shadow logic: 
-    // We compute the local UV that intersects the sun ray from the current fragment
+    // Ray from surface fragment positionLocal along +sunDirLocal towards cloud sphere at radius Rc = Re + shadowDist
     const sunDirLocal = normalize(modelWorldMatrixInverse.mul(vec4(sunDir, 0.0)).xyz);
     
     const shadowDistUniform = uniform(CONSTANTS.GUI.CLOUD_SHADOWS.DISTANCE);
     const shadowIntensityUniform = uniform(CONSTANTS.GUI.CLOUD_SHADOWS.INTENSITY);
     const shadowColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.CLOUD_SHADOWS.COLOR)); // roughly 0.2, 0.25, 0.35
+    const cloudRotationYUniform = uniform(0.0);
 
     group.userData.shadowDist = shadowDistUniform;
     group.userData.shadowIntensity = shadowIntensityUniform;
     group.userData.shadowColor = shadowColorUniform;
+    group.userData.cloudRotationY = cloudRotationYUniform;
 
-    // Instead of a tiny constant which is invisible, calculate roughly intersection or just use a larger exaggerated offset
-    // To make it visible, we use an offset that stretches based on angle, or just a noticeably large constant.
-    const shadowDist = mix(0.1, shadowDistUniform, smoothstep(0.8, 0.0, dot(normalize(positionLocal), sunDirLocal)));
-    const shadowPosLocal = positionLocal.add(sunDirLocal.mul(shadowDist)); // approximate cloud offset
-    const shadowUv = equirectUV(normalize(shadowPosLocal));
+    // Ray-sphere intersection for cloud shadow projection
+    const posL = positionLocal;
+    const re = float(CONSTANTS.EARTH_RADIUS); // 10.0
+    const rc = re.add(shadowDistUniform); // e.g. 10.08
+    const deltaRc = rc.mul(rc).sub(re.mul(re)); // Rc^2 - Re^2
+    const dotPS = dot(posL, sunDirLocal);
+    
+    // t = -dotPS + sqrt(dotPS^2 + deltaRc)
+    const rayT = dotPS.negate().add(dotPS.mul(dotPS).add(deltaRc).max(0.0).sqrt());
+    const shadowPosLocal = posL.add(sunDirLocal.mul(rayT));
+
+    // Rotate shadowPosLocal around Y axis by -cloudRotationY to align with the cloud mesh's relative rotation
+    const cosR = cos(cloudRotationYUniform.negate());
+    const sinR = sin(cloudRotationYUniform.negate());
+    const rotX = shadowPosLocal.x.mul(cosR).sub(shadowPosLocal.z.mul(sinR));
+    const rotZ = shadowPosLocal.x.mul(sinR).add(shadowPosLocal.z.mul(cosR));
+    const shadowPosRotated = vec3(rotX, shadowPosLocal.y, rotZ);
+
+    const shadowUv = equirectUV(normalize(shadowPosRotated));
 
     const shadowOpacity = texture(cloudsMapTex, shadowUv).r;
     
@@ -145,7 +171,11 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const eclipseDimmer = mix(vec3(1.0), vec3(0.015, 0.02, 0.025), moonEclipseShadow);
     // --------------------------------------------------
 
-    earthMaterial.colorNode = texture(colorMapTex).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer) as any;
+    const earthBaseColor = texture(colorMapTex).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer);
+    earthMaterial.colorNode = Fn(() => {
+        Discard(cutDiscard);
+        return earthBaseColor;
+    })() as any;
     
     // Specular map for water reflections: white spec = water, black spec = land
     const baseRoughness = mix(0.9, waterRoughnessUniform, spec);
@@ -188,7 +218,16 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const baseDarkSideScatter = mix(vec3(0.005, 0.007, 0.01), vec3(0.05, 0.06, 0.08), nightFade);
     const darkSideScatter = baseDarkSideScatter.mul(darkSideBrightnessUniform).mul(20.0);
     
-    cloudsMaterial.colorNode = vec3(1.0).mul(twilightTint).mul(eclipseDimmer) as any;
+    const cosCloudR = cos(cloudRotationYUniform);
+    const sinCloudR = sin(cloudRotationYUniform);
+    const cloudEarthLocalX = positionLocal.x.mul(cosCloudR).add(positionLocal.z.mul(sinCloudR));
+    const cloudCutDiscard = cloudEarthLocalX.greaterThan(cutX);
+
+    const cloudColorBase = vec3(1.0).mul(twilightTint).mul(eclipseDimmer);
+    cloudsMaterial.colorNode = Fn(() => {
+        Discard(cloudCutDiscard);
+        return cloudColorBase;
+    })() as any;
     cloudsMaterial.emissiveNode = darkSideScatter as any;
     cloudsMaterial.roughnessNode = mix(float(0.9), float(1.0), moonEclipseShadow);
     cloudsMaterial.specularColorNode = mix(vec3(1.0), vec3(0.0), moonEclipseShadow);
@@ -290,7 +329,11 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const finalAirglow = airglowLight.add(finalScattering.mul(0.1));
 
     // Outer atmosphere adds scattered light
-    atmosMaterial.colorNode = mix(finalScattering, finalAirglow, atmosModeUniform);
+    const atmosBaseColor = mix(finalScattering, finalAirglow, atmosModeUniform);
+    atmosMaterial.colorNode = Fn(() => {
+        Discard(cutDiscard);
+        return atmosBaseColor;
+    })() as any;
     
     const atmosHigh = new THREE.Mesh(atmosGeoHigh, atmosMaterial);
     const atmosMed = new THREE.Mesh(atmosGeoMed, atmosMaterial);
@@ -318,7 +361,11 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const innerFinalScattering = scatteredLight.mul(innerOpticalDepth);
     const innerFinalAirglow = innerFinalScattering.mul(0.5).add(airglowColorUniform.mul(innerOpticalDepth).mul(0.5).mul(intensityPhase));
     
-    innerAtmosMaterial.colorNode = mix(innerFinalScattering, innerFinalAirglow, atmosModeUniform);
+    const innerAtmosBaseColor = mix(innerFinalScattering, innerFinalAirglow, atmosModeUniform);
+    innerAtmosMaterial.colorNode = Fn(() => {
+        Discard(cutDiscard);
+        return innerAtmosBaseColor;
+    })() as any;
 
     
     const innerAtmosHigh = new THREE.Mesh(innerAtmosGeoHigh, innerAtmosMaterial);
@@ -340,6 +387,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     lod.addLevel(lowGroup, 55);
 
     group.add(lod);
+
+    // 5. Inner Layers Model (Inner/Outer Core, Mantle, Crust & Cross-Section Cap)
+    const innerLayers = createInnerLayers(cutawayProgressUniform);
+    group.add(innerLayers);
 
     return group;
 }
