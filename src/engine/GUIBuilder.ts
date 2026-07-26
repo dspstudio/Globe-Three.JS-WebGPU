@@ -419,7 +419,10 @@ export function buildGui(gui: GUI, options: GuiOptions) {
 
     tmFolder.add(tmSettings, "mode", modes)
       .name("Tone Mapping Mode")
-      .onChange(() => rebuildPipeline());
+      .onChange((v: any) => {
+        tmSettings.mode = Number(v);
+        rebuildPipeline();
+      });
 
     tmFolder.add(tmSettings, "exposure", 0.1, 5.0).step(0.01)
       .name("Exposure")

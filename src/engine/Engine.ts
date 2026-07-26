@@ -442,10 +442,11 @@ export class Engine {
 
     const rebuildPipeline = () => {
       let finalNode: any;
-      if (tmSettings.mode === THREE.NoToneMapping) {
+      const modeNum = Number(tmSettings.mode);
+      if (modeNum === THREE.NoToneMapping) {
         finalNode = hdrColorGraded;
       } else {
-        finalNode = hdrColorGraded.toneMapping(tmSettings.mode as THREE.ToneMapping, tmExposureUniform);
+        finalNode = hdrColorGraded.toneMapping(modeNum as THREE.ToneMapping, tmExposureUniform);
       }
       finalNode = vignetteShader({
         color: finalNode,
@@ -462,6 +463,7 @@ export class Engine {
       finalNode = film(finalNode, filmIntensityUniform);
       
       this.renderPipeline.outputNode = smaa(finalNode);
+      this.renderPipeline.needsUpdate = true;
       if (!this.isDisposed && this.renderer) {
         this.renderer.compileAsync(this.scene, this.camera);
       }
