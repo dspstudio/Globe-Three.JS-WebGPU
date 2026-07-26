@@ -297,7 +297,7 @@ export class Engine {
     this.root.add(earth);
     this.earthGroup = earth;
     this.countryBorders = new CountryBorders(this.earthGroup);
-    if (CONSTANTS.GUI.COUNTRY_BORDERS.ENABLED || CONSTANTS.GUI.COUNTRY_BORDERS.SHOW_NAMES) {
+    if (CONSTANTS.GUI.COUNTRY_BORDERS.ENABLED) {
       await this.countryBorders.init();
     }
     this.initLocations();

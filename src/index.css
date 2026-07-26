@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+/* Fix lil-gui select dropdowns having unreadable text due to browser/tailwind resets */
+.lil-gui select option {
+  background-color: var(--widget-color, #424242);
+  color: var(--text-color, #ebebeb);
+}

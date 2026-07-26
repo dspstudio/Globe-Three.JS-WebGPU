@@ -258,12 +258,6 @@ export function buildGui(gui: GUI, options: GuiOptions) {
         borders.setEnabled(v);
       });
     bordersFolder
-      .add(borders.settings, "showNames")
-      .name("Show Country Names")
-      .onChange((v: boolean) => {
-        borders.setNamesEnabled(v);
-      });
-    bordersFolder
       .addColor(borders.settings, "color")
       .name("Line Color")
       .onChange((c: number) => {
