@@ -136,6 +136,17 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     citiesSettings,
   } = options;
 
+  const uiFolder = gui.addFolder("HUD & UI Overlay");
+  const uiConfig = {
+    showHud: false,
+  };
+  uiFolder
+    .add(uiConfig, "showHud")
+    .name("Show On-Screen HUD")
+    .onChange((visible: boolean) => {
+      window.dispatchEvent(new CustomEvent("toggle-layer-hud", { detail: { visible } }));
+    });
+
   const envGroup = gui.addFolder("Environment Settings");
 
   const sunFolder = envGroup.addFolder("Sun & Lighting");
@@ -288,14 +299,23 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     const cutawayFolder = earthGroup.addFolder("Cross-Section (Inner Core)");
     const cutawayConfig = {
       progress: earth.userData.cutawayProgress.value,
+      showHud: false,
       toggleCutaway: () => {
         const current = earth.userData.cutawayProgress.value;
         const target = current > 0.5 ? 0.0 : 1.0;
         earth.userData.cutawayProgress.value = target;
         cutawayConfig.progress = target;
+        window.dispatchEvent(new CustomEvent('cutaway-changed', { detail: { value: target } }));
         gui.controllersRecursive().forEach((c) => c.updateDisplay());
       }
     };
+
+    cutawayFolder
+      .add(cutawayConfig, "showHud")
+      .name("Show Layer HUD")
+      .onChange((visible: boolean) => {
+        window.dispatchEvent(new CustomEvent("toggle-layer-hud", { detail: { visible } }));
+      });
 
     cutawayFolder
       .add(cutawayConfig, "progress", 0.0, 1.0, 0.01)
@@ -306,6 +326,14 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     cutawayFolder
       .add(cutawayConfig, "toggleCutaway")
       .name("Toggle Cutaway");
+
+    window.addEventListener("layer-hud-changed", (e: any) => {
+      if (e && e.detail && typeof e.detail.visible === "boolean") {
+        cutawayConfig.showHud = e.detail.visible;
+        uiConfig.showHud = e.detail.visible;
+        gui.controllersRecursive().forEach((c) => c.updateDisplay());
+      }
+    });
   }
 
   const atmosFolder = earthGroup.addFolder("Atmosphere");

@@ -3,14 +3,14 @@ import { EarthCanvas } from './components/EarthCanvas';
 import { Loader } from './components/Loader';
 import { ProjectedLocation } from './types';
 import { CINEMATIC_LOCATIONS } from './constants';
-import { AlertTriangle, RefreshCw, Layers, Sliders, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Layers, Sliders, ChevronDown, ChevronUp, X } from 'lucide-react';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadingMsg, setLoadingMsg] = useState('Initializing WebGPU');
   const [renderError, setRenderError] = useState<string | null>(null);
   const [cutawayProgress, setCutawayProgress] = useState(0);
-  const [isHudOpen, setIsHudOpen] = useState(true);
+  const [showHud, setShowHud] = useState(false);
   const [showLegend, setShowLegend] = useState(true);
 
   // Listen for cutaway state changes from Engine
@@ -20,7 +20,7 @@ export default function App() {
         const val = e.detail.value;
         setCutawayProgress(val);
         if (val > 0) {
-          setIsHudOpen(true);
+          setShowHud(true);
         }
       }
     };
@@ -28,14 +28,27 @@ export default function App() {
     return () => window.removeEventListener('cutaway-changed', handleCutawayChanged);
   }, []);
 
-  const toggleCutaway = () => {
-    setIsHudOpen((prev) => {
-      const next = !prev;
-      if (next && cutawayProgress === 0) {
-        window.dispatchEvent(new CustomEvent('toggle-cutaway'));
+  // Listen for HUD toggle requests from lil-gui or external events
+  useEffect(() => {
+    const handleToggleHud = (e: any) => {
+      if (e && e.detail && typeof e.detail.visible === 'boolean') {
+        setShowHud(e.detail.visible);
+      } else {
+        setShowHud((prev) => !prev);
       }
-      return next;
-    });
+    };
+    window.addEventListener('toggle-layer-hud', handleToggleHud);
+    return () => window.removeEventListener('toggle-layer-hud', handleToggleHud);
+  }, []);
+
+  // Sync HUD open state with lil-gui
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('layer-hud-changed', { detail: { visible: showHud } }));
+  }, [showHud]);
+
+  const toggleCutaway = () => {
+    setShowHud(true);
+    window.dispatchEvent(new CustomEvent('toggle-cutaway'));
   };
 
   const handleCutawaySlider = (val: number) => {
@@ -209,7 +222,7 @@ export default function App() {
         </div>
       )}
 
-      {/* --- HUD GRAPHICS & OVERLAYS --- */}
+      {/* --- CITY BEACONS & LABELS --- */}
       {!loading && (
         <>
           {/* Glowing Beacon Core Points */}
@@ -280,136 +293,146 @@ export default function App() {
               </div>
             );
           })}
+        </>
+      )}
 
-          {/* --- EARTH CROSS-SECTION HUD BUTTON & GEOLOGICAL LEGEND --- */}
-          <div className="absolute bottom-6 left-6 z-30 flex flex-col gap-3 max-w-xs w-full pointer-events-auto">
-            {/* Cutaway Action Button */}
-            <button
-              onClick={toggleCutaway}
-              className={`w-full py-2.5 px-4 rounded-xl border backdrop-blur-md font-mono text-xs font-semibold tracking-wider transition-all flex items-center justify-between shadow-2xl ${
-                isHudOpen
-                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 shadow-amber-500/10'
-                  : 'bg-neutral-900/80 hover:bg-neutral-800/90 border-white/15 text-white/90'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Layers className={`w-4 h-4 ${isHudOpen ? 'text-amber-400 animate-pulse' : 'text-neutral-400'}`} />
-                <span>{cutawayProgress > 0 ? 'EARTH CUTAWAY: ACTIVE' : isHudOpen ? 'EARTH CROSS-SECTION (OPEN)' : 'EARTH CROSS-SECTION'}</span>
+      {/* --- EARTH CROSS-SECTION HUD BUTTON & GEOLOGICAL LEGEND --- */}
+      {!loading && showHud && (
+        <div className="absolute bottom-6 left-6 z-30 flex flex-col gap-3 max-w-xs w-full pointer-events-auto">
+          {/* Cutaway Action Button */}
+          <button
+            onClick={toggleCutaway}
+            className={`w-full py-2.5 px-4 rounded-xl border backdrop-blur-md font-mono text-xs font-semibold tracking-wider transition-all flex items-center justify-between shadow-2xl ${
+              cutawayProgress > 0
+                ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 shadow-amber-500/10'
+                : 'bg-neutral-900/80 hover:bg-neutral-800/90 border-white/15 text-white/90'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Layers className={`w-4 h-4 ${cutawayProgress > 0 ? 'text-amber-400 animate-pulse' : 'text-neutral-400'}`} />
+              <span>{cutawayProgress > 0 ? 'EARTH CUTAWAY: ACTIVE' : 'EARTH CROSS-SECTION'}</span>
+            </div>
+            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
+              cutawayProgress > 0 ? 'bg-amber-500/30 border-amber-400/40 text-amber-300' : 'bg-white/10 border-white/20 text-neutral-300'
+            }`}>
+              {cutawayProgress > 0 ? `${Math.round(cutawayProgress * 100)}%` : '0%'}
+            </span>
+          </button>
+
+          {/* Geological Structure Legend Overlay */}
+          <div className="bg-neutral-900/90 border border-amber-500/30 rounded-xl p-3.5 backdrop-blur-lg shadow-2xl flex flex-col gap-2.5 animate-fadeIn font-mono text-xs text-neutral-300">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <div className="flex items-center gap-2 font-bold text-amber-300 tracking-wider text-[11px] uppercase">
+                <Sliders className="w-3.5 h-3.5" />
+                Internal Layers
               </div>
-              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
-                isHudOpen ? 'bg-amber-500/30 border-amber-400/40 text-amber-300' : 'bg-white/10 border-white/20 text-neutral-300'
-              }`}>
-                {cutawayProgress > 0 ? `${Math.round(cutawayProgress * 100)}%` : isHudOpen ? '0%' : 'OPEN HUD'}
-              </span>
-            </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowLegend(!showLegend)}
+                  className="p-1 hover:bg-white/10 rounded text-neutral-400 hover:text-white"
+                  title={showLegend ? "Collapse details" : "Expand details"}
+                >
+                  {showLegend ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={() => setShowHud(false)}
+                  className="p-1 hover:bg-white/10 rounded text-neutral-400 hover:text-amber-400"
+                  title="Close Layer HUD"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
 
-            {/* Geological Structure Legend Overlay */}
-            {isHudOpen && (
-              <div className="bg-neutral-900/90 border border-amber-500/30 rounded-xl p-3.5 backdrop-blur-lg shadow-2xl flex flex-col gap-2.5 animate-fadeIn font-mono text-xs text-neutral-300">
-                <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                  <div className="flex items-center gap-2 font-bold text-amber-300 tracking-wider text-[11px] uppercase">
-                    <Sliders className="w-3.5 h-3.5" />
-                    Internal Layers
+            {/* Depth Slider */}
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between text-[10px] text-neutral-400 font-semibold">
+                <span>Peeling Progress</span>
+                <span className="text-amber-300 font-bold">
+                  {cutawayProgress <= 0.2 && "Crust (0-20%)"}
+                  {cutawayProgress > 0.2 && cutawayProgress <= 0.4 && "Upper Mantle (20-40%)"}
+                  {cutawayProgress > 0.4 && cutawayProgress <= 0.6 && "Lower Mantle (40-60%)"}
+                  {cutawayProgress > 0.6 && cutawayProgress <= 0.8 && "Outer Core (60-80%)"}
+                  {cutawayProgress > 0.8 && "Inner Core (80-100%)"}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={cutawayProgress}
+                onChange={(e) => handleCutawaySlider(parseFloat(e.target.value))}
+                className="w-full accent-amber-400 bg-neutral-800 h-1.5 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+
+            {/* Layers Detail List */}
+            {showLegend && (
+              <div className="flex flex-col gap-1.5 pt-1 text-[10px] leading-tight">
+                <div className={`flex items-center justify-between p-1.5 rounded border transition-all ${
+                  cutawayProgress > 0.8
+                    ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 font-bold shadow-[0_0_8px_rgba(251,191,36,0.2)]'
+                    : 'bg-white/5 border-white/5 text-neutral-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#FFF5D0] shadow-[0_0_6px_#FFAA00]" />
+                    <span className="font-semibold">Inner Core</span>
                   </div>
-                  <button
-                    onClick={() => setShowLegend(!showLegend)}
-                    className="p-1 hover:bg-white/10 rounded text-neutral-400 hover:text-white"
-                  >
-                    {showLegend ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                  </button>
+                  <span className="opacity-80">1,220 km | Solid Fe-Ni</span>
                 </div>
 
-                {/* Depth Slider */}
-                <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] text-neutral-400 font-semibold">
-                    <span>Peeling Progress</span>
-                    <span className="text-amber-300 font-bold">
-                      {cutawayProgress <= 0.2 && "Crust (0-20%)"}
-                      {cutawayProgress > 0.2 && cutawayProgress <= 0.4 && "Upper Mantle (20-40%)"}
-                      {cutawayProgress > 0.4 && cutawayProgress <= 0.6 && "Lower Mantle (40-60%)"}
-                      {cutawayProgress > 0.6 && cutawayProgress <= 0.8 && "Outer Core (60-80%)"}
-                      {cutawayProgress > 0.8 && "Inner Core (80-100%)"}
-                    </span>
+                <div className={`flex items-center justify-between p-1.5 rounded border transition-all ${
+                  cutawayProgress > 0.6 && cutawayProgress <= 0.8
+                    ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 font-bold shadow-[0_0_8px_rgba(251,191,36,0.2)]'
+                    : 'bg-white/5 border-white/5 text-neutral-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#FF3B00] shadow-[0_0_6px_#FF2200]" />
+                    <span className="font-semibold">Outer Core</span>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={cutawayProgress}
-                    onChange={(e) => handleCutawaySlider(parseFloat(e.target.value))}
-                    className="w-full accent-amber-400 bg-neutral-800 h-1.5 rounded-lg appearance-none cursor-pointer"
-                  />
+                  <span className="opacity-80">2,200 km | Liquid Fe-Ni</span>
                 </div>
 
-                {/* Layers Detail List */}
-                {showLegend && (
-                  <div className="flex flex-col gap-1.5 pt-1 text-[10px] leading-tight">
-                    <div className={`flex items-center justify-between p-1.5 rounded border transition-all ${
-                      cutawayProgress > 0.8
-                        ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 font-bold shadow-[0_0_8px_rgba(251,191,36,0.2)]'
-                        : 'bg-white/5 border-white/5 text-neutral-300'
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#FFF5D0] shadow-[0_0_6px_#FFAA00]" />
-                        <span className="font-semibold">Inner Core</span>
-                      </div>
-                      <span className="opacity-80">1,220 km | Solid Fe-Ni</span>
-                    </div>
-
-                    <div className={`flex items-center justify-between p-1.5 rounded border transition-all ${
-                      cutawayProgress > 0.6 && cutawayProgress <= 0.8
-                        ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 font-bold shadow-[0_0_8px_rgba(251,191,36,0.2)]'
-                        : 'bg-white/5 border-white/5 text-neutral-300'
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#FF3B00] shadow-[0_0_6px_#FF2200]" />
-                        <span className="font-semibold">Outer Core</span>
-                      </div>
-                      <span className="opacity-80">2,200 km | Liquid Fe-Ni</span>
-                    </div>
-
-                    <div className={`flex items-center justify-between p-1.5 rounded border transition-all ${
-                      cutawayProgress > 0.4 && cutawayProgress <= 0.6
-                        ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 font-bold shadow-[0_0_8px_rgba(251,191,36,0.2)]'
-                        : 'bg-white/5 border-white/5 text-neutral-300'
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#C84218]" />
-                        <span className="font-semibold">Lower Mantle</span>
-                      </div>
-                      <span className="opacity-80">2,230 km | Silicates</span>
-                    </div>
-
-                    <div className={`flex items-center justify-between p-1.5 rounded border transition-all ${
-                      cutawayProgress > 0.2 && cutawayProgress <= 0.4
-                        ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 font-bold shadow-[0_0_8px_rgba(251,191,36,0.2)]'
-                        : 'bg-white/5 border-white/5 text-neutral-300'
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#8D6E63]" />
-                        <span className="font-semibold">Upper Mantle</span>
-                      </div>
-                      <span className="opacity-80">670 km | Asthenosphere</span>
-                    </div>
-
-                    <div className={`flex items-center justify-between p-1.5 rounded border transition-all ${
-                      cutawayProgress <= 0.2
-                        ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 font-bold shadow-[0_0_8px_rgba(251,191,36,0.2)]'
-                        : 'bg-white/5 border-white/5 text-neutral-300'
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#263238]" />
-                        <span className="font-semibold">Crust & Atmos</span>
-                      </div>
-                      <span className="opacity-80">5–70 km | Lithosphere</span>
-                    </div>
+                <div className={`flex items-center justify-between p-1.5 rounded border transition-all ${
+                  cutawayProgress > 0.4 && cutawayProgress <= 0.6
+                    ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 font-bold shadow-[0_0_8px_rgba(251,191,36,0.2)]'
+                    : 'bg-white/5 border-white/5 text-neutral-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#C84218]" />
+                    <span className="font-semibold">Lower Mantle</span>
                   </div>
-                )}
+                  <span className="opacity-80">~2,240 km | Silicates</span>
+                </div>
+
+                <div className={`flex items-center justify-between p-1.5 rounded border transition-all ${
+                  cutawayProgress > 0.2 && cutawayProgress <= 0.4
+                    ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 font-bold shadow-[0_0_8px_rgba(251,191,36,0.2)]'
+                    : 'bg-white/5 border-white/5 text-neutral-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#8D6E63]" />
+                    <span className="font-semibold">Upper Mantle</span>
+                  </div>
+                  <span className="opacity-80">~660 km | Asthenosphere</span>
+                </div>
+
+                <div className={`flex items-center justify-between p-1.5 rounded border transition-all ${
+                  cutawayProgress <= 0.2
+                    ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 font-bold shadow-[0_0_8px_rgba(251,191,36,0.2)]'
+                    : 'bg-white/5 border-white/5 text-neutral-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#263238]" />
+                    <span className="font-semibold">Crust & Atmos</span>
+                  </div>
+                  <span className="opacity-80">5–70 km | Lithosphere</span>
+                </div>
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
 
       {/* Primary Loading Screen */}

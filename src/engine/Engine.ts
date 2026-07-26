@@ -132,6 +132,7 @@ export class Engine {
   public focusTargetAnchorId: string | null = null;
 
   private isDisposed: boolean = false;
+  private resizeObserver: ResizeObserver | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -174,6 +175,9 @@ export class Engine {
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = false;
+
+    // Set initial non-zero size right away on renderer
+    this.handleResize();
 
     if (onProgress) onProgress("Setting up Scene & Camera");
     this.camera = new THREE.PerspectiveCamera(
@@ -587,6 +591,10 @@ export class Engine {
 
     this.handleResize();
     window.addEventListener("resize", this.handleResize);
+    if (this.canvas.parentElement && typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(() => this.handleResize());
+      this.resizeObserver.observe(this.canvas.parentElement);
+    }
 
     if (onProgress) onProgress("Compiling Shaders (Warmup)");
     // Warmup render to compile shader pipelines asynchronously before returning from init
@@ -600,20 +608,23 @@ export class Engine {
   }
 
   private handleResize = () => {
-    if (!this.canvas.parentElement || !this.renderer) return;
-    const width = this.canvas.parentElement.clientWidth;
-    const height = this.canvas.parentElement.clientHeight;
+    if (!this.renderer) return;
+    const parent = this.canvas.parentElement;
+    const width = Math.max(1, Math.floor(parent?.clientWidth || window.innerWidth || 800));
+    const height = Math.max(1, Math.floor(parent?.clientHeight || window.innerHeight || 600));
 
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    // Fallback to 1.0 if not initialized yet
+    if (this.camera) {
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+    }
+
     const scale = this.renderSettings
       ? this.renderSettings.resolutionScale
       : 1.0;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * scale);
     this.renderer.setSize(width, height);
 
-    if (this.backgroundStars) {
+    if (this.backgroundStars && this.camera) {
       const pPU = height / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)));
       this.backgroundStars.setPixelsPerUnit(pPU);
     }
@@ -933,6 +944,10 @@ export class Engine {
   public dispose() {
     this.isDisposed = true;
     cancelAnimationFrame(this.animationId);
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
     window.removeEventListener("resize", this.handleResize);
     window.removeEventListener("toggle-cutaway", this.handleToggleCutaway);
     window.removeEventListener("set-cutaway", this.handleSetCutaway as any);

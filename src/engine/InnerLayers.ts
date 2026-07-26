@@ -33,9 +33,9 @@ const noiseIC = Fn(([x]: [any]) => {
 });
 
 const fbmIC = Fn(([p]: [any]) => {
-    const v = float(0.0).toVar('v');
-    const a = float(0.5).toVar('a');
-    const curP = vec3(p).toVar('curP');
+    const v = float(0.0).toVar();
+    const a = float(0.5).toVar();
+    const curP = vec3(p).toVar();
 
     v.addAssign(a.mul(noiseIC(curP)));
     curP.assign(curP.mul(2.02));
@@ -74,7 +74,7 @@ const calculateMoltenCore = Fn(([pos, uTime]: [any, any]) => {
 
     const c1 = mix(coldMetal, deepRed, smoothstep(float(0.15), float(0.45), heat));
     const c2 = mix(c1, orange, smoothstep(float(0.45), float(0.75), heat));
-    const heatColor = mix(c2, whiteHot, smoothstep(float(0.78), float(0.95), heat)).toVar('heatColor');
+    const heatColor = mix(c2, whiteHot, smoothstep(float(0.78), float(0.95), heat)).toVar();
 
     const veins = smoothstep(float(0.6), float(0.9), fbmIC(p.mul(6.0).add(n2.mul(3.0))));
     heatColor.addAssign(veins.mul(vec3(1.0, 0.5, 0.15)).mul(0.6));
@@ -83,9 +83,9 @@ const calculateMoltenCore = Fn(([pos, uTime]: [any, any]) => {
 });
 
 const fbmLM = Fn(([p]: [any]) => {
-    const v = float(0.0).toVar('v');
-    const a = float(0.5).toVar('a');
-    const curP = vec3(p).toVar('curP');
+    const v = float(0.0).toVar();
+    const a = float(0.5).toVar();
+    const curP = vec3(p).toVar();
 
     v.addAssign(a.mul(noiseIC(curP)));
     curP.assign(curP.mul(2.03));
@@ -136,7 +136,7 @@ const calculateLowerMantle = Fn(([pos, uTime]: [any, any]) => {
     const r1 = mix(coldRock, basalt, smoothstep(float(0.1), float(0.4), heat));
     const r2 = mix(r1, ironRock, smoothstep(float(0.4), float(0.62), heat));
     const r3 = mix(r2, hotZone, smoothstep(float(0.65), float(0.8), heat));
-    const rockColor = mix(r3, plumeCore, smoothstep(float(0.85), float(0.97), heat)).toVar('rockColor');
+    const rockColor = mix(r3, plumeCore, smoothstep(float(0.85), float(0.97), heat)).toVar();
 
     const grain = fbmLM(p.mul(18.0));
     rockColor.assign(rockColor.mul(float(0.85).add(grain.mul(0.3))));
@@ -151,9 +151,9 @@ const calculateLowerMantle = Fn(([pos, uTime]: [any, any]) => {
 });
 
 const fbmUM = Fn(([p]: [any]) => {
-    const v = float(0.0).toVar('v');
-    const a = float(0.5).toVar('a');
-    const curP = vec3(p).toVar('curP');
+    const v = float(0.0).toVar();
+    const a = float(0.5).toVar();
+    const curP = vec3(p).toVar();
 
     v.addAssign(a.mul(noiseIC(curP)));
     curP.assign(curP.mul(2.03));
@@ -203,7 +203,7 @@ const calculateUpperMantle = Fn(([pos, uTime]: [any, any]) => {
 
     const rockMix = smoothstep(float(0.15), float(0.6), flow);
     const r1 = mix(coldRock, tanRock, rockMix);
-    const rockColor = mix(r1, rustyBrown, smoothstep(float(0.5), float(0.85), mineralDetail)).toVar('rockColor');
+    const rockColor = mix(r1, rustyBrown, smoothstep(float(0.5), float(0.85), mineralDetail)).toVar();
 
     const grain = fbmUM(p.mul(20.0));
     rockColor.assign(rockColor.mul(float(0.82).add(grain.mul(0.35))));
@@ -224,9 +224,9 @@ const calculateUpperMantle = Fn(([pos, uTime]: [any, any]) => {
 });
 
 const fbmCrust = Fn(([p]: [any]) => {
-    const v = float(0.0).toVar('v');
-    const a = float(0.5).toVar('a');
-    const curP = vec3(p).toVar('curP');
+    const v = float(0.0).toVar();
+    const a = float(0.5).toVar();
+    const curP = vec3(p).toVar();
 
     v.addAssign(a.mul(noiseIC(curP)));
     curP.assign(curP.mul(2.05));
@@ -273,7 +273,7 @@ const calculateCrust = Fn(([pos, uTime]: [any, any]) => {
     const layerId = floor(strataAxis);
     const layerSel = mod(layerId, float(4.0));
     
-    const strataColor = layer1.toVar('strataColor');
+    const strataColor = layer1.toVar();
     strataColor.assign(mix(strataColor, layer2, smoothstep(float(0.5), float(1.5), layerSel)));
     strataColor.assign(mix(strataColor, layer3, smoothstep(float(1.5), float(2.5), layerSel)));
     strataColor.assign(mix(strataColor, layer4, smoothstep(float(2.5), float(3.5), layerSel)));
@@ -286,7 +286,7 @@ const calculateCrust = Fn(([pos, uTime]: [any, any]) => {
     const grain = fbmCrust(p.mul(22.0));
     strataColor.assign(strataColor.mul(float(0.8).add(grain.mul(0.4))));
 
-    const rockColor = strataColor.toVar('rockColor');
+    const rockColor = strataColor.toVar();
 
     // --- Fracture / fault network ---
     const faultNoise = fbmCrust(p.mul(1.6).add(vec3(driftTime.mul(0.5), 0.0, 0.0)));
@@ -355,7 +355,7 @@ export function createInnerLayers(cutawayProgressUniform: any): THREE.Group {
     group.add(outerCoreMesh);
 
     // 3. Lower Mantle (Semi-molten Silicate with rock convection & thermal plumes)
-    const lowerMantleGeo = new THREE.SphereGeometry(5.8, 48, 48);
+    const lowerMantleGeo = new THREE.SphereGeometry(6.375, 48, 48);
     const lowerMantleMat = new MeshBasicNodeMaterial();
     const lowerMantleColor = calculateLowerMantle(positionLocal, time);
     applyCut(lowerMantleMat, lowerMantleColor, cutX_LM);
@@ -363,7 +363,7 @@ export function createInnerLayers(cutawayProgressUniform: any): THREE.Group {
     group.add(lowerMantleMesh);
 
     // 4. Upper Mantle (Peridotite/Pyroxenite rock with ductile flow & partial melt)
-    const upperMantleGeo = new THREE.SphereGeometry(8.5, 48, 48);
+    const upperMantleGeo = new THREE.SphereGeometry(9.25, 48, 48);
     const upperMantleMat = new MeshBasicNodeMaterial();
     const upperMantleColor = calculateUpperMantle(positionLocal, time);
     applyCut(upperMantleMat, upperMantleColor, cutX_UM);
@@ -391,20 +391,20 @@ export function createInnerLayers(cutawayProgressUniform: any): THREE.Group {
     // Procedural layer bands with crisp boundary rings
     const isIC = dist.lessThan(1.8);
     const isOC = dist.greaterThanEqual(1.8).and(dist.lessThan(3.5));
-    const isLM = dist.greaterThanEqual(3.5).and(dist.lessThan(5.8));
-    const isUM = dist.greaterThanEqual(5.8).and(dist.lessThan(8.5));
-    const isCrust = dist.greaterThanEqual(8.5);
+    const isLM = dist.greaterThanEqual(3.5).and(dist.lessThan(6.375));
+    const isUM = dist.greaterThanEqual(6.375).and(dist.lessThan(9.25));
+    const isCrust = dist.greaterThanEqual(9.25);
 
     // Dark line separator rings
     const isRing = dist.sub(1.8).abs().lessThan(0.04)
         .or(dist.sub(3.5).abs().lessThan(0.04))
-        .or(dist.sub(5.8).abs().lessThan(0.04))
-        .or(dist.sub(8.5).abs().lessThan(0.04));
+        .or(dist.sub(6.375).abs().lessThan(0.04))
+        .or(dist.sub(9.25).abs().lessThan(0.04));
 
     const icMoltenCapColor = calculateMoltenCore(vec3(positionLocal.x, positionLocal.y, 1.8), time);
     const ocMoltenCapColor = calculateMoltenCore(vec3(positionLocal.x, positionLocal.y, 3.5), time.mul(1.2)).mul(vec3(1.0, 0.5, 0.2));
-    const lmColor = calculateLowerMantle(vec3(positionLocal.x, positionLocal.y, 5.8), time);
-    const umColor = calculateUpperMantle(vec3(positionLocal.x, positionLocal.y, 8.5), time);
+    const lmColor = calculateLowerMantle(vec3(positionLocal.x, positionLocal.y, 6.375), time);
+    const umColor = calculateUpperMantle(vec3(positionLocal.x, positionLocal.y, 9.25), time);
     const crustCapColor = calculateCrust(vec3(positionLocal.x, positionLocal.y, 9.95), time);
     const ringColor = vec3(0.02, 0.02, 0.02);
 
