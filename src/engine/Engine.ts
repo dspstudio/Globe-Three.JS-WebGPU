@@ -402,10 +402,6 @@ export class Engine {
       blueGreenBoost: cgBlueGreenBoostUniform,
     } as any);
 
-    const sdrToneMapped = hdrColorGraded.toneMapping(
-      THREE.ACESFilmicToneMapping,
-    );
-
     this.caSettings = {
       enabled: CONSTANTS.GUI.CHROMATIC_ABERRATION.ENABLED,
       strength: CONSTANTS.GUI.CHROMATIC_ABERRATION.STRENGTH,
@@ -437,22 +433,41 @@ export class Engine {
     );
     const vignetteOffsetUniform = uniform(this.vignetteSettings.offset);
 
-    let finalNode: any = sdrToneMapped;
-    finalNode = vignetteShader({
-      color: finalNode,
-      uv: screenCoordinate.div(screenSize),
-      darkness: vignetteDarknessUniform,
-      offset: vignetteOffsetUniform,
-    } as any);
-    finalNode = chromaticAberration(
-      finalNode,
-      caStrengthUniform,
-      vec2(0.5, 0.5),
-      caScaleUniform,
-    );
-    finalNode = film(finalNode, filmIntensityUniform);
+    const tmSettings = {
+      mode: CONSTANTS.GUI.TONE_MAPPING.MODE,
+      exposure: CONSTANTS.GUI.TONE_MAPPING.EXPOSURE,
+      hdrPeakHighlights: CONSTANTS.GUI.TONE_MAPPING.HDR_PEAK_HIGHLIGHTS,
+    };
+    const tmExposureUniform = uniform(tmSettings.exposure);
 
-    this.renderPipeline.outputNode = smaa(finalNode);
+    const rebuildPipeline = () => {
+      let finalNode: any;
+      if (tmSettings.mode === THREE.NoToneMapping) {
+        finalNode = hdrColorGraded;
+      } else {
+        finalNode = hdrColorGraded.toneMapping(tmSettings.mode as THREE.ToneMapping, tmExposureUniform);
+      }
+      finalNode = vignetteShader({
+        color: finalNode,
+        uv: screenCoordinate.div(screenSize),
+        darkness: vignetteDarknessUniform,
+        offset: vignetteOffsetUniform,
+      } as any);
+      finalNode = chromaticAberration(
+        finalNode,
+        caStrengthUniform,
+        vec2(0.5, 0.5),
+        caScaleUniform,
+      );
+      finalNode = film(finalNode, filmIntensityUniform);
+      
+      this.renderPipeline.outputNode = smaa(finalNode);
+      if (!this.isDisposed && this.renderer) {
+        this.renderer.compileAsync(this.scene, this.camera);
+      }
+    };
+
+    rebuildPipeline();
 
     this.flareSettings = {
       enabled: CONSTANTS.GUI.LENS_FLARE.ENABLED,
@@ -510,6 +525,9 @@ export class Engine {
     this.stats.dom.style.display = debugSettings.stats ? "block" : "none";
 
     buildGui(this.gui, {
+      tmSettings,
+      tmExposureUniform,
+      rebuildPipeline,
       cgSettings,
       cgUniforms: {
         contrast: cgContrastUniform,

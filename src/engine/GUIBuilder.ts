@@ -4,6 +4,13 @@ import { CONSTANTS } from "../constants";
 import { CountryBorders } from "./CountryBorders";
 
 export interface GuiOptions {
+  tmSettings?: {
+    mode: number;
+    exposure: number;
+    hdrPeakHighlights: boolean;
+  };
+  tmExposureUniform?: any;
+  rebuildPipeline?: () => void;
   cgSettings: {
     contrast: number;
     saturation: number;
@@ -395,6 +402,58 @@ export function buildGui(gui: GUI, options: GuiOptions) {
 
   const postGroup = gui.addFolder("Post Processing");
 
+  const tmFolder = postGroup.addFolder("Tone Mapping & HDR");
+  if (options.tmSettings && options.rebuildPipeline && options.tmExposureUniform) {
+    const tmSettings = options.tmSettings;
+    const rebuildPipeline = options.rebuildPipeline;
+    const tmExposureUniform = options.tmExposureUniform;
+
+    const modes = {
+      "None": THREE.NoToneMapping,
+      "ACES Filmic": THREE.ACESFilmicToneMapping,
+      "AgX": THREE.AgXToneMapping,
+      "Neutral": THREE.NeutralToneMapping,
+      "Reinhard": THREE.ReinhardToneMapping,
+      "Cineon": THREE.CineonToneMapping
+    };
+
+    tmFolder.add(tmSettings, "mode", modes)
+      .name("Tone Mapping Mode")
+      .onChange(() => rebuildPipeline());
+
+    tmFolder.add(tmSettings, "exposure", 0.1, 5.0).step(0.01)
+      .name("Exposure")
+      .onChange((v: number) => {
+        tmExposureUniform.value = v;
+      });
+
+    tmFolder.add(tmSettings, "hdrPeakHighlights")
+      .name("HDR Display Mode")
+      .onChange((v: boolean) => {
+        if (v) {
+          options.sunSettings.intensity = 4.5;
+          options.bloomSettings.strength = 0.2;
+          tmExposureUniform.value = 1.25;
+          tmSettings.exposure = 1.25;
+        } else {
+          options.sunSettings.intensity = CONSTANTS.GUI.SUN.INTENSITY;
+          options.bloomSettings.strength = CONSTANTS.GUI.BLOOM.STRENGTH;
+          tmExposureUniform.value = CONSTANTS.GUI.TONE_MAPPING.EXPOSURE;
+          tmSettings.exposure = CONSTANTS.GUI.TONE_MAPPING.EXPOSURE;
+        }
+        
+        options.sunMaterial.color = new THREE.Color(CONSTANTS.GUI.SUN.COLOR).multiplyScalar(options.sunSettings.intensity);
+        if (options.bloomPass) {
+          options.bloomPass.strength.value = options.bloomSettings.enabled ? options.bloomSettings.strength : 0.0;
+        }
+        
+        // Force update GUI controllers
+        gui.controllersRecursive().forEach((c) => {
+          c.updateDisplay();
+        });
+      });
+  }
+
   const ccFolder = postGroup.addFolder("Color Grading");
   ccFolder
     .add(cgSettings, "contrast", 0.5, 2.0)
@@ -629,6 +688,11 @@ export function buildGui(gui: GUI, options: GuiOptions) {
           COLOR: anamorphicSettings.color,
           INNER_FADE: anamorphicSettings.innerFade,
           OUTER_FADE: anamorphicSettings.outerFade,
+        },
+        TONE_MAPPING: {
+          MODE: options.tmSettings ? options.tmSettings.mode : CONSTANTS.GUI.TONE_MAPPING.MODE,
+          EXPOSURE: options.tmSettings ? options.tmSettings.exposure : CONSTANTS.GUI.TONE_MAPPING.EXPOSURE,
+          HDR_PEAK_HIGHLIGHTS: options.tmSettings ? options.tmSettings.hdrPeakHighlights : CONSTANTS.GUI.TONE_MAPPING.HDR_PEAK_HIGHLIGHTS,
         },
         BLOOM: {
           ENABLED: bloomSettings.enabled,

@@ -81,6 +81,11 @@ export const CONSTANTS = {
   },
   GUI: {
     SHOW: typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("settings") !== "false") : true,
+    TONE_MAPPING: {
+      MODE: 4, // 4 = ACESFilmicToneMapping
+      EXPOSURE: 1.0,
+      HDR_PEAK_HIGHLIGHTS: false,
+    },
     BLOOM: {
       ENABLED: true,
       STRENGTH: 0.1,
