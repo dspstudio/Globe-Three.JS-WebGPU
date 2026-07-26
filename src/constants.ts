@@ -197,6 +197,13 @@ export const CONSTANTS = {
     CITIES: {
       ENABLED: false,
     },
+    COUNTRY_BORDERS: {
+      ENABLED: false,
+      SHOW_NAMES: false,
+      COLOR: 0xffffff,
+      OPACITY: 0.05,
+      ELEVATION: 0.015,
+    },
   },
 };
 

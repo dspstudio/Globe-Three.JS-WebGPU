@@ -30,6 +30,7 @@ import {
 import { colorGradeShader, vignetteShader } from "./ColorGrading";
 import { buildGui } from "./GUIBuilder";
 import { BackgroundStars } from "./BackgroundStars";
+import { CountryBorders } from "./CountryBorders";
 import { ProjectedLocation } from "../types";
 
 export class Engine {
@@ -125,6 +126,7 @@ export class Engine {
   };
 
   private earthGroup: THREE.Group | null = null;
+  public countryBorders: CountryBorders | null = null;
   private locationAnchors: Map<string, THREE.Object3D> = new Map();
   public onLocationsUpdate: ((locations: ProjectedLocation[]) => void) | null = null;
   public focusTargetAnchorId: string | null = null;
@@ -294,6 +296,10 @@ export class Engine {
     if (this.isDisposed) return;
     this.root.add(earth);
     this.earthGroup = earth;
+    this.countryBorders = new CountryBorders(this.earthGroup);
+    if (CONSTANTS.GUI.COUNTRY_BORDERS.ENABLED || CONSTANTS.GUI.COUNTRY_BORDERS.SHOW_NAMES) {
+      await this.countryBorders.init();
+    }
     this.initLocations();
 
     if (onProgress) onProgress("Building Render Pipeline");
@@ -551,6 +557,7 @@ export class Engine {
       backgroundStarsSettings: this.backgroundStarsSettings,
       backgroundStars: this.backgroundStars,
       citiesSettings: this.citiesSettings,
+      countryBorders: this.countryBorders,
     });
 
     this.handleResize();
@@ -878,6 +885,9 @@ export class Engine {
     }
     if (this.backgroundStars) {
       this.backgroundStars.dispose();
+    }
+    if (this.countryBorders) {
+      this.countryBorders.dispose();
     }
   }
 

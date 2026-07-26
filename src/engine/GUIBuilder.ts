@@ -1,6 +1,7 @@
 import GUI from "lil-gui";
 import * as THREE from "three";
 import { CONSTANTS } from "../constants";
+import { CountryBorders } from "./CountryBorders";
 
 export interface GuiOptions {
   cgSettings: {
@@ -89,6 +90,7 @@ export interface GuiOptions {
   citiesSettings?: {
     enabled: boolean;
   };
+  countryBorders?: CountryBorders | null;
 }
 
 export function buildGui(gui: GUI, options: GuiOptions) {
@@ -244,6 +246,35 @@ export function buildGui(gui: GUI, options: GuiOptions) {
 
   if (citiesSettings) {
     earthGroup.add(citiesSettings, "enabled").name("Show Cities");
+  }
+
+  if (options.countryBorders) {
+    const borders = options.countryBorders;
+    const bordersFolder = earthGroup.addFolder("Country Borders");
+    bordersFolder
+      .add(borders.settings, "enabled")
+      .name("Show Wireframe")
+      .onChange((v: boolean) => {
+        borders.setEnabled(v);
+      });
+    bordersFolder
+      .add(borders.settings, "showNames")
+      .name("Show Country Names")
+      .onChange((v: boolean) => {
+        borders.setNamesEnabled(v);
+      });
+    bordersFolder
+      .addColor(borders.settings, "color")
+      .name("Line Color")
+      .onChange((c: number) => {
+        borders.setColor(c);
+      });
+    bordersFolder
+      .add(borders.settings, "opacity", 0.01, 1.0, 0.01)
+      .name("Opacity")
+      .onChange((v: number) => {
+        borders.setOpacity(v);
+      });
   }
 
   earthGroup.add(earthSettings, "trueInclination").name("True Inclination");
