@@ -1,18 +1,31 @@
 import * as THREE from "three";
 import { CONSTANTS } from "../constants";
-import { wgslFn } from "three/tsl";
+import { wgslFn, glslFn } from "three/tsl";
 
-export const noise1DWgsl = wgslFn(`
+// 1D Noise
+const noise1DWgsl = wgslFn(`
 fn noise1D(t: f32) -> f32 {
 	return fract(sin(t * 12.9898) * 43758.5453);
 }`);
 
-export const noise2DWgsl = wgslFn(`
+const noise1DGlsl = glslFn(`
+float noise1D(float t) {
+	return fract(sin(t * 12.9898) * 43758.5453);
+}`);
+
+// 2D Noise
+const noise2DWgsl = wgslFn(`
 fn noise2D(t: vec2<f32>) -> f32 {
 	return fract(sin(dot(t, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }`);
 
-export const lensflareWgsl = wgslFn(
+const noise2DGlsl = glslFn(`
+float noise2D(vec2 t) {
+	return fract(sin(dot(t, vec2(12.9898, 78.233))) * 43758.5453);
+}`);
+
+// Lensflare
+const lensflareWgsl = wgslFn(
   `
 fn lensflare(uv: vec2<f32>, pos: vec2<f32>, iTime: f32) -> vec3<f32> {
 	var main: vec2<f32> = uv - pos;
@@ -64,14 +77,91 @@ fn lensflare(uv: vec2<f32>, pos: vec2<f32>, iTime: f32) -> vec3<f32> {
   [noise1DWgsl, noise2DWgsl] as any,
 );
 
-export const ccWgsl = wgslFn(`
+const lensflareGlsl = glslFn(
+  `
+vec3 lensflare(vec2 uv, vec2 pos, float iTime) {
+	vec2 main = uv - pos;
+	vec2 uvd = uv * length(uv);
+	
+	float ang = atan(main.y, main.x);
+	float dist = length(main);
+    dist = pow(dist, 0.1);
+
+    vec2 t = vec2((ang - iTime / 9.0) * 16.0, dist * 32.0);
+	float n = noise2D(t + vec2(iTime, iTime));
+	
+	float f0 = 1.0 / (length(uv - pos) * 16.0 + 1.0);
+	
+    float n2 = noise1D(abs(ang) + n / 2.0);
+	f0 = f0 + f0 * (sin((ang + iTime / 18.0 + n2 * 2.0) * 12.0) * 0.1 + dist * 0.1 + 0.8);
+
+	float f2  = max(1.0 / (1.0 + 32.0 * pow(length(uvd + 0.8  * pos), 2.0)), 0.0) * 0.25;
+	float f22 = max(1.0 / (1.0 + 32.0 * pow(length(uvd + 0.85 * pos), 2.0)), 0.0) * 0.23;
+	float f23 = max(1.0 / (1.0 + 32.0 * pow(length(uvd + 0.9  * pos), 2.0)), 0.0) * 0.21;
+	
+	vec2 uvx = mix(uv, uvd, vec2(-0.5, -0.5));
+	
+	float f4  = max(0.01 - pow(length(uvx + 0.4  * pos), 2.4), 0.0) * 6.0;
+	float f42 = max(0.01 - pow(length(uvx + 0.45 * pos), 2.4), 0.0) * 5.0;
+	float f43 = max(0.01 - pow(length(uvx + 0.5  * pos), 2.4), 0.0) * 3.0;
+	
+	uvx = mix(uv, uvd, vec2(-0.4, -0.4));
+	
+	float f5  = max(0.01 - pow(length(uvx + 0.2 * pos), 5.5), 0.0) * 2.0;
+	float f52 = max(0.01 - pow(length(uvx + 0.4 * pos), 5.5), 0.0) * 2.0;
+	float f53 = max(0.01 - pow(length(uvx + 0.6 * pos), 5.5), 0.0) * 2.0;
+	
+	uvx = mix(uv, uvd, vec2(-0.5, -0.5));
+	
+	float f6  = max(0.01 - pow(length(uvx - 0.3   * pos), 1.6), 0.0) * 6.0;
+	float f62 = max(0.01 - pow(length(uvx - 0.325 * pos), 1.6), 0.0) * 3.0;
+	float f63 = max(0.01 - pow(length(uvx - 0.35  * pos), 1.6), 0.0) * 5.0;
+	
+	vec3 c = vec3(f0, f0, f0);
+	
+	c.r += f2 + f4 + f5 + f6;
+    c.g += f22 + f42 + f52 + f62;
+    c.b += f23 + f43 + f53 + f63;
+	
+	return c;
+}
+`,
+  [noise1DGlsl, noise2DGlsl] as any,
+);
+
+export function lensflareShader(args: any) {
+  if (CONSTANTS.RENDER_TYPE === 'webgpu') {
+    return lensflareWgsl(args as any);
+  } else {
+    return lensflareGlsl(args as any);
+  }
+}
+
+// CC
+const ccWgsl = wgslFn(`
 fn cc(color: vec3<f32>, factor: f32, factor2: f32) -> vec3<f32> {
 	var w: f32 = color.x + color.y + color.z;
 	return mix(color, vec3<f32>(w, w, w) * factor, vec3<f32>(w * factor2, w * factor2, w * factor2));
 }
 `);
 
-export const anamorphicWgsl = wgslFn(`
+const ccGlsl = glslFn(`
+vec3 cc(vec3 color, float factor, float factor2) {
+	float w = color.x + color.y + color.z;
+	return mix(color, vec3(w, w, w) * factor, vec3(w * factor2, w * factor2, w * factor2));
+}
+`);
+
+export function ccShader(args: any) {
+  if (CONSTANTS.RENDER_TYPE === 'webgpu') {
+    return ccWgsl(args as any);
+  } else {
+    return ccGlsl(args as any);
+  }
+}
+
+// Anamorphic
+const anamorphicWgsl = wgslFn(`
 fn anamorphic(uv: vec2<f32>, pos: vec2<f32>, size: f32, thickness: f32) -> f32 {
     let d: vec2<f32> = uv - pos;
     let x: f32 = abs(d.x);
@@ -80,20 +170,46 @@ fn anamorphic(uv: vec2<f32>, pos: vec2<f32>, size: f32, thickness: f32) -> f32 {
     let w: f32 = max(size, 0.01);
     let h: f32 = max(thickness, 0.001);
     
-    // Sharp core streak
     let coreIntensity: f32 = (h * 0.002) / max(y, 0.00001);
     let coreFade: f32 = exp(- (x * x) / (w * w * 0.5));
     
-    // Wider, softer glow
     let glowIntensity: f32 = (h * 0.02) / max(y, 0.0001);
     let glowFade: f32 = exp(- (x * x) / (w * w * 2.0));
     
-    // Combine layers
     let flare: f32 = coreIntensity * coreFade * 0.8 + glowIntensity * glowFade * 0.2;
-    
     return flare;
 }
 `);
+
+const anamorphicGlsl = glslFn(`
+float anamorphic(vec2 uv, vec2 pos, float size, float thickness) {
+    vec2 d = uv - pos;
+    float x = abs(d.x);
+    float y = abs(d.y);
+    
+    float w = max(size, 0.01);
+    float h = max(thickness, 0.001);
+    
+    float coreIntensity = (h * 0.002) / max(y, 0.00001);
+    float coreFade = exp(- (x * x) / (w * w * 0.5));
+    
+    float glowIntensity = (h * 0.02) / max(y, 0.0001);
+    float glowFade = exp(- (x * x) / (w * w * 2.0));
+    
+    float flare = coreIntensity * coreFade * 0.8 + glowIntensity * glowFade * 0.2;
+    return flare;
+}
+`);
+
+export function anamorphicShader(args: any) {
+  if (CONSTANTS.RENDER_TYPE === 'webgpu') {
+    return anamorphicWgsl(args as any);
+  } else {
+    return anamorphicGlsl(args as any);
+  }
+}
+
+
 
 export function updateLensFlare(
   sunMesh: THREE.Mesh,

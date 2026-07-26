@@ -22,12 +22,12 @@ import { CONSTANTS, CINEMATIC_LOCATIONS } from "../constants";
 import { createEarth } from "./Earth";
 import { createMoon, updateMoon } from "./Moon";
 import {
-  lensflareWgsl,
-  ccWgsl,
+  lensflareShader,
+  ccShader,
   updateLensFlare,
-  anamorphicWgsl,
+  anamorphicShader,
 } from "./LensFlare";
-import { colorGradeWgsl, vignetteWgsl } from "./ColorGrading";
+import { colorGradeShader, vignetteShader } from "./ColorGrading";
 import { buildGui } from "./GUIBuilder";
 import { BackgroundStars } from "./BackgroundStars";
 import { ProjectedLocation } from "../types";
@@ -150,7 +150,24 @@ export class Engine {
       powerPreference: "high-performance",
       forceWebGL: CONSTANTS.RENDER_TYPE === "webgl",
     });
-    await this.renderer.init();
+    try {
+      await this.renderer.init();
+    } catch (err) {
+      if (CONSTANTS.RENDER_TYPE === "webgpu") {
+        console.warn("WebGPU initialization failed, falling back to WebGL:", err);
+        CONSTANTS.RENDER_TYPE = "webgl";
+        this.renderer = new WebGPURenderer({
+          canvas: this.canvas,
+          antialias: true,
+          alpha: false,
+          powerPreference: "high-performance",
+          forceWebGL: true,
+        });
+        await this.renderer.init();
+      } else {
+        throw err;
+      }
+    }
     if (this.isDisposed) return;
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.0;
@@ -327,7 +344,7 @@ export class Engine {
       new THREE.Color(this.anamorphicSettings.color),
     );
 
-    const lF = lensflareWgsl({
+    const lF = lensflareShader({
       uv: flareUv,
       pos: this.flarePosUniform,
       iTime: time,
@@ -336,7 +353,7 @@ export class Engine {
       .mul(vec3(1.2, 1.2, 1.2))
       .mul(lF as any);
     const colorFlare = mul(
-      ccWgsl({
+      ccShader({
         color: flareColorModified,
         factor: 0.5,
         factor2: 0.1,
@@ -344,7 +361,7 @@ export class Engine {
       this.flareIntensityUniform as any,
     );
 
-    const aF = anamorphicWgsl({
+    const aF = anamorphicShader({
       uv: flareUv,
       pos: this.flarePosUniform,
       size: this.anamorphicSizeUniform,
@@ -371,7 +388,7 @@ export class Engine {
     const cgBlackLevelUniform = uniform(cgSettings.blackLevel);
     const cgBlueGreenBoostUniform = uniform(cgSettings.blueGreenBoost);
 
-    const hdrColorGraded = colorGradeWgsl({
+    const hdrColorGraded = colorGradeShader({
       color: preColorGrade,
       contrast: cgContrastUniform,
       saturation: cgSaturationUniform,
@@ -415,7 +432,7 @@ export class Engine {
     const vignetteOffsetUniform = uniform(this.vignetteSettings.offset);
 
     let finalNode: any = sdrToneMapped;
-    finalNode = vignetteWgsl({
+    finalNode = vignetteShader({
       color: finalNode,
       uv: screenCoordinate.div(screenSize),
       darkness: vignetteDarknessUniform,

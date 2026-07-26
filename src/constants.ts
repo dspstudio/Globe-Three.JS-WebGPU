@@ -45,8 +45,25 @@ const use2k =
   typeof window !== "undefined" &&
   (isMobileOrTablet() || getInitialResolutionScale() < 1.0);
 
+const detectRenderType = (): "webgpu" | "webgl" => {
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("preferred_render_type");
+      if (saved === "webgpu" || saved === "webgl") {
+        return saved;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return "webgpu";
+  }
+  return "gpu" in navigator && !!(navigator as any).gpu ? "webgpu" : "webgl";
+};
+
 export const CONSTANTS = {
-  RENDER_TYPE: "webgpu", // 'webgpu' or 'webgl'
+  RENDER_TYPE: detectRenderType() as "webgpu" | "webgl",
   EARTH_RADIUS: 10,
   ATMOSPHERE_RADIUS: 10.2,
   SEGMENTS: use2k ? 64 : 256, // Less segments for lower-end devices

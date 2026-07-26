@@ -5,10 +5,11 @@ import { ProjectedLocation } from '../types';
 export interface EarthCanvasProps {
     onLoad: () => void;
     onProgress: (msg: string) => void;
+    onError?: (errorMsg: string) => void;
     onLocationsUpdate?: (locations: ProjectedLocation[]) => void;
 }
 
-export function EarthCanvas({ onLoad, onProgress, onLocationsUpdate }: EarthCanvasProps) {
+export function EarthCanvas({ onLoad, onProgress, onError, onLocationsUpdate }: EarthCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<Engine | null>(null);
     
@@ -37,8 +38,11 @@ export function EarthCanvas({ onLoad, onProgress, onLocationsUpdate }: EarthCanv
         }).then(() => {
             if (active) onLoad();
         }).catch((err) => {
-            console.error(err);
-            if (active) onLoad();
+            console.error("3D Engine initialization failed:", err);
+            if (active) {
+                const msg = err instanceof Error ? err.message : String(err);
+                if (onError) onError(msg);
+            }
         });
 
         return () => {

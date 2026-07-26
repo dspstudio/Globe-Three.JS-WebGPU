@@ -3,10 +3,12 @@ import { EarthCanvas } from './components/EarthCanvas';
 import { Loader } from './components/Loader';
 import { ProjectedLocation } from './types';
 import { CINEMATIC_LOCATIONS } from './constants';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadingMsg, setLoadingMsg] = useState('Initializing WebGPU');
+  const [renderError, setRenderError] = useState<string | null>(null);
 
   const getTimezoneOffset = (id: string): number => {
     switch (id) {
@@ -129,14 +131,50 @@ export default function App() {
     return `${Math.abs(lat).toFixed(2)}° ${latDir}, ${Math.abs(lng).toFixed(2)}° ${lngDir}`;
   };
 
+  const handleError = useCallback((errorMsg: string) => {
+    setRenderError(errorMsg);
+    setLoading(false);
+  }, []);
+
   return (
     <div className="relative w-screen h-screen bg-neutral-950 text-white overflow-hidden font-sans">
       {/* Three.js / WebGPU Base Canvas */}
       <EarthCanvas 
         onLoad={handleLoad} 
         onProgress={setLoadingMsg} 
+        onError={handleError}
         onLocationsUpdate={handleLocationsUpdate}
       />
+
+      {/* Render Error Fallback Overlay */}
+      {renderError && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-neutral-950/95 backdrop-blur-md">
+          <div className="max-w-md w-full bg-neutral-900 border border-red-500/30 rounded-2xl p-6 shadow-2xl flex flex-col items-center text-center">
+            <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-4 text-red-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2 font-mono">3D Graphics Initialization Failed</h2>
+            <p className="text-sm text-neutral-300 mb-4 leading-relaxed">
+              Could not start hardware-accelerated 3D rendering (WebGPU or WebGL2).
+            </p>
+            <div className="w-full bg-neutral-950 border border-white/10 rounded-lg p-3 text-left font-mono text-xs text-red-300/80 mb-6 break-words">
+              {renderError}
+            </div>
+            <div className="w-full text-xs text-neutral-400 text-left space-y-1.5 mb-6">
+              <p className="font-semibold text-neutral-200">Troubleshooting Steps:</p>
+              <p>• Ensure hardware acceleration is enabled in your browser settings.</p>
+              <p>• Try updating your GPU drivers or modern browser (Chrome, Edge, Safari).</p>
+              <p>• You can switch between WebGPU / WebGL from the GUI control panel.</p>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full py-2.5 px-4 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white text-xs font-mono font-semibold uppercase tracking-wider rounded-lg transition flex items-center justify-center gap-2 border border-white/20"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reload Application
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* --- HUD GRAPHICS & OVERLAYS --- */}
       {!loading && (

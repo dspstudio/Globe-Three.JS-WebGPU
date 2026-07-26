@@ -547,6 +547,23 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   cameraFolder.add(camActions, "reset").name("Reset View");
 
   const debugFolder = gui.addFolder("Display & Debug");
+  const renderTypeController = {
+    renderType: CONSTANTS.RENDER_TYPE,
+  };
+  debugFolder
+    .add(renderTypeController, "renderType", { WebGPU: "webgpu", WebGL: "webgl" })
+    .name("Renderer Backend")
+    .onChange((value: "webgpu" | "webgl") => {
+      CONSTANTS.RENDER_TYPE = value;
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("preferred_render_type", value);
+        } catch (e) {
+          // ignore
+        }
+        window.location.reload();
+      }
+    });
   debugFolder
     .add(debugSettings, "stats")
     .name("Show Stats")
