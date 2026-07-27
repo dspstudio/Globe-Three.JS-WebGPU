@@ -37,8 +37,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     // 1. Earth base
     const geoHigh = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
-    const geoMed = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)));
-    const geoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)), Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)));
+    const geoMed = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
+    const geoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, Math.max(24, Math.floor(CONSTANTS.SEGMENTS / 4)), Math.max(24, Math.floor(CONSTANTS.SEGMENTS / 4)));
     const earthMaterial = new MeshPhysicalNodeMaterial();
     
     const sunDir = sunDirUniform;

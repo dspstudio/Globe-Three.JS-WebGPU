@@ -331,7 +331,8 @@ export function createInnerLayers(cutawayProgressUniform: any): THREE.Group {
     const applyCut = (mat: any, colorNode: any, layerCutX: any) => {
         mat.side = THREE.DoubleSide;
         mat.depthWrite = true;
-        const cutDiscard = positionLocal.x.greaterThan(layerCutX);
+        const isClosed = cutawayProgressUniform.lessThanEqual(0.001);
+        const cutDiscard = isClosed.or(positionLocal.x.greaterThan(layerCutX));
         mat.colorNode = Fn(() => {
             Discard(cutDiscard);
             return colorNode;
@@ -371,7 +372,7 @@ export function createInnerLayers(cutawayProgressUniform: any): THREE.Group {
     group.add(upperMantleMesh);
 
     // 5. Crust Inner Wall (Stratified rock with layered banding & fault network)
-    const crustGeo = new THREE.SphereGeometry(9.95, 48, 48);
+    const crustGeo = new THREE.SphereGeometry(9.65, 48, 48);
     const crustMat = new MeshBasicNodeMaterial();
     const crustColor = calculateCrust(positionLocal, time);
     applyCut(crustMat, crustColor, cutX_Crust);
@@ -405,7 +406,7 @@ export function createInnerLayers(cutawayProgressUniform: any): THREE.Group {
     const ocMoltenCapColor = calculateMoltenCore(vec3(positionLocal.x, positionLocal.y, 3.5), time.mul(1.2)).mul(vec3(1.0, 0.5, 0.2));
     const lmColor = calculateLowerMantle(vec3(positionLocal.x, positionLocal.y, 6.375), time);
     const umColor = calculateUpperMantle(vec3(positionLocal.x, positionLocal.y, 9.25), time);
-    const crustCapColor = calculateCrust(vec3(positionLocal.x, positionLocal.y, 9.95), time);
+    const crustCapColor = calculateCrust(vec3(positionLocal.x, positionLocal.y, 9.65), time);
     const ringColor = vec3(0.02, 0.02, 0.02);
 
     let capColor = select(isUM, umColor, crustCapColor);
