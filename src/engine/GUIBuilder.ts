@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { CONSTANTS } from "../constants";
 import { CountryBorders } from "./CountryBorders";
 import { CountryLabels } from "./CountryLabels";
+import { Graticule } from "./Graticule";
 
 export interface GuiOptions {
   tmSettings?: {
@@ -100,6 +101,7 @@ export interface GuiOptions {
   };
   countryBorders?: CountryBorders | null;
   countryLabels?: CountryLabels | null;
+  graticule?: Graticule | null;
 }
 
 export function buildGui(gui: GUI, options: GuiOptions) {
@@ -289,6 +291,35 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     labelsFolder.add(labels.settings, "fadeDistanceFar", 25, 50, 1).name("Far Reveal Zoom");
     labelsFolder.add(labels.settings, "fadeDistanceMid", 18, 35, 1).name("Mid Reveal Zoom");
     labelsFolder.add(labels.settings, "fadeDistanceClose", 12, 25, 1).name("Close Reveal Zoom");
+  }
+
+  if (options.graticule) {
+    const graticule = options.graticule;
+    const gridFolder = earthGroup.addFolder("Lat / Lon Grid");
+    gridFolder
+      .add(graticule.settings, "enabled")
+      .name("Show Grid")
+      .onChange((v: boolean) => {
+        graticule.setEnabled(v);
+      });
+    gridFolder
+      .add(graticule.settings, "step", { "5°": 5, "10°": 10, "15°": 15, "30°": 30, "45°": 45 })
+      .name("Interval")
+      .onChange((v: any) => {
+        graticule.setStep(Number(v));
+      });
+    gridFolder
+      .addColor(graticule.settings, "color")
+      .name("Line Color")
+      .onChange((c: number) => {
+        graticule.setColor(c);
+      });
+    gridFolder
+      .add(graticule.settings, "opacity", 0.01, 1.0, 0.01)
+      .name("Opacity")
+      .onChange((v: number) => {
+        graticule.setOpacity(v);
+      });
   }
 
   earthGroup.add(earthSettings, "trueInclination").name("True Inclination");
@@ -857,6 +888,13 @@ export function buildGui(gui: GUI, options: GuiOptions) {
           FADE_DISTANCE_FAR: options.countryLabels ? options.countryLabels.settings.fadeDistanceFar : CONSTANTS.GUI.COUNTRY_LABELS.FADE_DISTANCE_FAR,
           FADE_DISTANCE_MID: options.countryLabels ? options.countryLabels.settings.fadeDistanceMid : CONSTANTS.GUI.COUNTRY_LABELS.FADE_DISTANCE_MID,
           FADE_DISTANCE_CLOSE: options.countryLabels ? options.countryLabels.settings.fadeDistanceClose : CONSTANTS.GUI.COUNTRY_LABELS.FADE_DISTANCE_CLOSE,
+        },
+        GRATICULE: {
+          ENABLED: options.graticule ? options.graticule.settings.enabled : CONSTANTS.GUI.GRATICULE.ENABLED,
+          STEP: options.graticule ? options.graticule.settings.step : CONSTANTS.GUI.GRATICULE.STEP,
+          COLOR: options.graticule ? options.graticule.settings.color : CONSTANTS.GUI.GRATICULE.COLOR,
+          OPACITY: options.graticule ? options.graticule.settings.opacity : CONSTANTS.GUI.GRATICULE.OPACITY,
+          ELEVATION: options.graticule ? options.graticule.settings.elevation : CONSTANTS.GUI.GRATICULE.ELEVATION,
         },
       };
 

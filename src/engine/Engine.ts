@@ -32,6 +32,7 @@ import { buildGui } from "./GUIBuilder";
 import { BackgroundStars } from "./BackgroundStars";
 import { CountryBorders } from "./CountryBorders";
 import { CountryLabels } from "./CountryLabels";
+import { Graticule } from "./Graticule";
 import { ProjectedLocation, ProjectedCountryLabel } from "../types";
 
 export class Engine {
@@ -129,6 +130,7 @@ export class Engine {
   private earthGroup: THREE.Group | null = null;
   public countryBorders: CountryBorders | null = null;
   public countryLabels: CountryLabels | null = null;
+  public graticule: Graticule | null = null;
   private locationAnchors: Map<string, THREE.Object3D> = new Map();
   public onLocationsUpdate: ((locations: ProjectedLocation[]) => void) | null = null;
   public onCountryLabelsUpdate: ((labels: ProjectedCountryLabel[]) => void) | null = null;
@@ -315,6 +317,8 @@ export class Engine {
 
     this.countryLabels = new CountryLabels(this.earthGroup);
     await this.countryLabels.init();
+
+    this.graticule = new Graticule(this.earthGroup);
 
     this.initLocations();
 
@@ -595,6 +599,7 @@ export class Engine {
       citiesSettings: this.citiesSettings,
       countryBorders: this.countryBorders,
       countryLabels: this.countryLabels,
+      graticule: this.graticule,
     });
 
     this.handleResize();
@@ -996,6 +1001,9 @@ export class Engine {
     }
     if (this.countryLabels) {
       this.countryLabels.dispose();
+    }
+    if (this.graticule) {
+      this.graticule.dispose();
     }
   }
 

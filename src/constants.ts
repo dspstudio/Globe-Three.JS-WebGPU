@@ -217,6 +217,13 @@ export const CONSTANTS = {
       FADE_DISTANCE_MID: 27,
       FADE_DISTANCE_CLOSE: 19,
     },
+    GRATICULE: {
+      ENABLED: false,
+      STEP: 15,
+      COLOR: 0x00d2ff,
+      OPACITY: 0.15,
+      ELEVATION: 0.012,
+    },
   },
 };
 
