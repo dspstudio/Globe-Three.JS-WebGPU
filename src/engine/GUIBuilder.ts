@@ -294,6 +294,14 @@ export function buildGui(gui: GUI, options: GuiOptions) {
         const current = earth.userData.cutawayProgress.value;
         const target = current > 0.5 ? 0.0 : 1.0;
         earth.userData.cutawayProgress.value = target;
+        if (earth.userData.innerLayers) {
+          const inner = earth.userData.innerLayers;
+          if (inner.userData.updateSubLayerVisibilities) {
+            inner.userData.updateSubLayerVisibilities(target);
+          } else {
+            inner.visible = target > 0.0001;
+          }
+        }
         cutawayConfig.progress = target;
         window.dispatchEvent(new CustomEvent('cutaway-changed', { detail: { value: target } }));
         gui.controllersRecursive().forEach((c) => c.updateDisplay());
@@ -312,6 +320,14 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       .name("Cutaway Depth")
       .onChange((v: number) => {
         earth.userData.cutawayProgress.value = v;
+        if (earth.userData.innerLayers) {
+          const inner = earth.userData.innerLayers;
+          if (inner.userData.updateSubLayerVisibilities) {
+            inner.userData.updateSubLayerVisibilities(v);
+          } else {
+            inner.visible = v > 0.0001;
+          }
+        }
       });
     cutawayFolder
       .add(cutawayConfig, "toggleCutaway")

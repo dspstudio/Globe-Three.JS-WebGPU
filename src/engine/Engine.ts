@@ -692,6 +692,16 @@ export class Engine {
       this.earthGroup.userData.cloudRotationY.value += this.earthSettings.rotationSpeed * 0.2;
     }
 
+    if (this.earthGroup && this.earthGroup.userData.innerLayers && this.earthGroup.userData.cutawayProgress) {
+      const p = this.earthGroup.userData.cutawayProgress.value;
+      const inner = this.earthGroup.userData.innerLayers;
+      if (inner.userData.updateSubLayerVisibilities) {
+        inner.userData.updateSubLayerVisibilities(p);
+      } else {
+        inner.visible = p > 0.0001;
+      }
+    }
+
     if (this.moonSettings.enabled) {
       this.moonSettings.angle += this.moonSettings.speed;
     }
@@ -922,6 +932,9 @@ export class Engine {
       const current = this.earthGroup.userData.cutawayProgress.value;
       const target = current > 0.5 ? 0.0 : 1.0;
       this.earthGroup.userData.cutawayProgress.value = target;
+      if (this.earthGroup.userData.innerLayers) {
+        this.earthGroup.userData.innerLayers.visible = target > 0.0001;
+      }
       if (this.gui) {
         this.gui.controllersRecursive().forEach((c) => c.updateDisplay());
       }
@@ -934,6 +947,9 @@ export class Engine {
   public setCutawayProgress(value: number) {
     if (this.earthGroup && this.earthGroup.userData.cutawayProgress) {
       this.earthGroup.userData.cutawayProgress.value = value;
+      if (this.earthGroup.userData.innerLayers) {
+        this.earthGroup.userData.innerLayers.visible = value > 0.0001;
+      }
       if (this.gui) {
         this.gui.controllersRecursive().forEach((c) => c.updateDisplay());
       }

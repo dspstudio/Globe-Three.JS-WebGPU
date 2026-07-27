@@ -430,6 +430,19 @@ export function createInnerLayers(cutawayProgressUniform: any): THREE.Group {
     capMesh.rotation.y = Math.PI / 2; // Facing +X
     group.add(capMesh);
 
+    group.userData.updateSubLayerVisibilities = (p: number) => {
+        group.visible = p > 0.0001;
+        if (!group.visible) return;
+
+        // Skip rendering occluded inner layers when upper layer is fully closed
+        crustMesh.visible = true;
+        upperMantleMesh.visible = true;
+        lowerMantleMesh.visible = p > 0.2;
+        outerCoreMesh.visible = p > 0.4;
+        innerCoreMesh.visible = p > 0.6;
+        capMesh.visible = true;
+    };
+
     return group;
 }
 

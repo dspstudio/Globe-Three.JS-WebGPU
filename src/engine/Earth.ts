@@ -395,6 +395,13 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     // 5. Inner Layers Model (Inner/Outer Core, Mantle, Crust & Cross-Section Cap)
     const innerLayers = createInnerLayers(cutawayProgressUniform);
+    const initialCutaway = CONSTANTS.GUI.EARTH.CUTAWAY || 0.0;
+    if (innerLayers.userData.updateSubLayerVisibilities) {
+        innerLayers.userData.updateSubLayerVisibilities(initialCutaway);
+    } else {
+        innerLayers.visible = initialCutaway > 0.0001;
+    }
+    group.userData.innerLayers = innerLayers;
     group.add(innerLayers);
 
     return group;
