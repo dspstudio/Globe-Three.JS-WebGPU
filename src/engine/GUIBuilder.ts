@@ -136,16 +136,6 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     citiesSettings,
   } = options;
 
-  const uiFolder = gui.addFolder("HUD & UI Overlay");
-  const uiConfig = {
-    showHud: false,
-  };
-  uiFolder
-    .add(uiConfig, "showHud")
-    .name("Show On-Screen HUD")
-    .onChange((visible: boolean) => {
-      window.dispatchEvent(new CustomEvent("toggle-layer-hud", { detail: { visible } }));
-    });
 
   const envGroup = gui.addFolder("Environment Settings");
 
@@ -330,7 +320,6 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     window.addEventListener("layer-hud-changed", (e: any) => {
       if (e && e.detail && typeof e.detail.visible === "boolean") {
         cutawayConfig.showHud = e.detail.visible;
-        uiConfig.showHud = e.detail.visible;
         gui.controllersRecursive().forEach((c) => c.updateDisplay());
       }
     });

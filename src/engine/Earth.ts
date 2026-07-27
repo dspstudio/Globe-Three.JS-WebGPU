@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, sub, float, min, bumpMap, Discard, select, Fn, clamp, cos, sin } from 'three/tsl';
+import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, atan, sub, float, min, bumpMap, Discard, select, Fn, clamp, cos, sin } from 'three/tsl';
 import { MeshStandardNodeMaterial, MeshBasicNodeMaterial, MeshPhysicalNodeMaterial } from 'three/webgpu';
 import { CONSTANTS } from '../constants';
 import { createInnerLayers } from './InnerLayers';
@@ -69,13 +69,18 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const shadowPosLocal = posL.add(sunDirLocal.mul(rayT));
 
     // Rotate shadowPosLocal around Y axis by -cloudRotationY to align with the cloud mesh's relative rotation
-    const cosR = cos(cloudRotationYUniform.negate());
-    const sinR = sin(cloudRotationYUniform.negate());
+    const rotAngle = cloudRotationYUniform;
+    const cosR = cos(rotAngle);
+    const sinR = sin(rotAngle);
     const rotX = shadowPosLocal.x.mul(cosR).sub(shadowPosLocal.z.mul(sinR));
     const rotZ = shadowPosLocal.x.mul(sinR).add(shadowPosLocal.z.mul(cosR));
     const shadowPosRotated = vec3(rotX, shadowPosLocal.y, rotZ);
 
-    const shadowUv = equirectUV(normalize(shadowPosRotated));
+    // Map 3D unit direction on cloud sphere to equirectangular UV matching SphereGeometry
+    const normShadowPos = normalize(shadowPosRotated);
+    const shadowU = atan(normShadowPos.x, normShadowPos.z).div(Math.PI * 2.0).add(0.5);
+    const shadowV = asin(clamp(normShadowPos.y, -1.0, 1.0)).div(Math.PI).add(0.5);
+    const shadowUv = vec2(shadowU, shadowV);
 
     const shadowOpacity = texture(cloudsMapTex, shadowUv).r;
     
