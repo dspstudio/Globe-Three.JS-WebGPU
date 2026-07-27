@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { EarthCanvas } from './components/EarthCanvas';
 import { Loader } from './components/Loader';
-import { ProjectedLocation } from './types';
+import { ProjectedLocation, ProjectedCountryLabel } from './types';
 import { CINEMATIC_LOCATIONS } from './constants';
 import { AlertTriangle, RefreshCw, Layers, Sliders, ChevronDown, ChevronUp, X } from 'lucide-react';
 
@@ -12,6 +12,9 @@ export default function App() {
   const [cutawayProgress, setCutawayProgress] = useState(0);
   const [showHud, setShowHud] = useState(false);
   const [showLegend, setShowLegend] = useState(true);
+
+  const countryLabelsContainerRef = useRef<HTMLDivElement>(null);
+  const countryLabelsDomMap = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Listen for cutaway state changes from Engine
   useEffect(() => {
@@ -170,6 +173,52 @@ export default function App() {
     }
   }, []);
 
+  // Optimized direct DOM update callback for high-performance country labels
+  const handleCountryLabelsUpdate = useCallback((labels: ProjectedCountryLabel[]) => {
+    const container = countryLabelsContainerRef.current;
+    if (!container) return;
+
+    const activeMap = new Map<string, boolean>();
+
+    for (const label of labels) {
+      activeMap.set(label.id, true);
+      let el = countryLabelsDomMap.current.get(label.id);
+
+      if (!el) {
+        el = document.createElement('div');
+        el.id = label.id;
+        el.style.position = 'absolute';
+        el.style.left = '0px';
+        el.style.top = '0px';
+        el.style.pointerEvents = 'none';
+
+        // Apply styling according to size tier
+        if (label.tier === 1) {
+          el.className = 'font-bold tracking-widest text-[11px] sm:text-[12px] md:text-[13px] text-amber-100/90 uppercase drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)] whitespace-nowrap transition-opacity duration-150';
+        } else if (label.tier === 2) {
+          el.className = 'font-semibold tracking-wider text-[9px] sm:text-[10px] md:text-[11px] text-white/80 uppercase drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] whitespace-nowrap transition-opacity duration-150';
+        } else {
+          el.className = 'font-medium tracking-normal text-[8px] sm:text-[9px] md:text-[10px] text-neutral-300/75 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] whitespace-nowrap transition-opacity duration-150';
+        }
+
+        el.textContent = label.name;
+        container.appendChild(el);
+        countryLabelsDomMap.current.set(label.id, el);
+      }
+
+      el.style.transform = `translate3d(${label.x.toFixed(1)}px, ${label.y.toFixed(1)}px, 0) translate(-50%, -50%)`;
+      el.style.opacity = String(label.opacity);
+      el.style.display = label.visible && label.opacity >= 0.02 ? 'block' : 'none';
+    }
+
+    // Hide inactive label DOM elements
+    countryLabelsDomMap.current.forEach((el, id) => {
+      if (!activeMap.has(id)) {
+        el.style.display = 'none';
+      }
+    });
+  }, []);
+
   // Utility to format latitude and longitude coordinates cleanly
   const formatLatLong = (lat: number, lng: number) => {
     const latDir = lat >= 0 ? 'N' : 'S';
@@ -190,6 +239,13 @@ export default function App() {
         onProgress={setLoadingMsg} 
         onError={handleError}
         onLocationsUpdate={handleLocationsUpdate}
+        onCountryLabelsUpdate={handleCountryLabelsUpdate}
+      />
+
+      {/* Country Names Overlay Container */}
+      <div 
+        ref={countryLabelsContainerRef} 
+        className="pointer-events-none absolute inset-0 z-10 overflow-hidden select-none" 
       />
 
       {/* Render Error Fallback Overlay */}

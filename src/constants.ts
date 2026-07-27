@@ -210,6 +210,13 @@ export const CONSTANTS = {
       OPACITY: 0.05,
       ELEVATION: 0.015,
     },
+    COUNTRY_LABELS: {
+      ENABLED: false,
+      MAX_VISIBLE: 45,
+      FADE_DISTANCE_FAR: 36,
+      FADE_DISTANCE_MID: 27,
+      FADE_DISTANCE_CLOSE: 19,
+    },
   },
 };
 

@@ -31,7 +31,8 @@ import { colorGradeShader, vignetteShader } from "./ColorGrading";
 import { buildGui } from "./GUIBuilder";
 import { BackgroundStars } from "./BackgroundStars";
 import { CountryBorders } from "./CountryBorders";
-import { ProjectedLocation } from "../types";
+import { CountryLabels } from "./CountryLabels";
+import { ProjectedLocation, ProjectedCountryLabel } from "../types";
 
 export class Engine {
   private canvas: HTMLCanvasElement;
@@ -127,8 +128,10 @@ export class Engine {
 
   private earthGroup: THREE.Group | null = null;
   public countryBorders: CountryBorders | null = null;
+  public countryLabels: CountryLabels | null = null;
   private locationAnchors: Map<string, THREE.Object3D> = new Map();
   public onLocationsUpdate: ((locations: ProjectedLocation[]) => void) | null = null;
+  public onCountryLabelsUpdate: ((labels: ProjectedCountryLabel[]) => void) | null = null;
   public focusTargetAnchorId: string | null = null;
 
   private isDisposed: boolean = false;
@@ -309,6 +312,10 @@ export class Engine {
     if (CONSTANTS.GUI.COUNTRY_BORDERS.ENABLED) {
       await this.countryBorders.init();
     }
+
+    this.countryLabels = new CountryLabels(this.earthGroup);
+    await this.countryLabels.init();
+
     this.initLocations();
 
     if (onProgress) onProgress("Building Render Pipeline");
@@ -587,6 +594,7 @@ export class Engine {
       backgroundStars: this.backgroundStars,
       citiesSettings: this.citiesSettings,
       countryBorders: this.countryBorders,
+      countryLabels: this.countryLabels,
     });
 
     this.handleResize();
@@ -765,6 +773,7 @@ export class Engine {
     );
 
     this.updateProjectedLocations();
+    this.updateProjectedCountryLabels();
 
     if (this.renderer && this.renderPipeline) {
       this.renderPipeline.render();
@@ -985,6 +994,9 @@ export class Engine {
     if (this.countryBorders) {
       this.countryBorders.dispose();
     }
+    if (this.countryLabels) {
+      this.countryLabels.dispose();
+    }
   }
 
   private initLocations() {
@@ -1065,6 +1077,16 @@ export class Engine {
     }
 
     this.onLocationsUpdate(projected);
+  }
+
+  private updateProjectedCountryLabels() {
+    if (!this.onCountryLabelsUpdate || !this.countryLabels || !this.countryLabels.isLoaded) return;
+
+    const width = this.canvas.parentElement ? this.canvas.parentElement.clientWidth : window.innerWidth;
+    const height = this.canvas.parentElement ? this.canvas.parentElement.clientHeight : window.innerHeight;
+
+    const projected = this.countryLabels.getProjectedLabels(this.camera, width, height);
+    this.onCountryLabelsUpdate(projected);
   }
 
   public focusOnLocation(id: string) {

@@ -1,24 +1,30 @@
 import { useEffect, useRef } from 'react';
 import { Engine } from '../engine/Engine';
-import { ProjectedLocation } from '../types';
+import { ProjectedLocation, ProjectedCountryLabel } from '../types';
 
 export interface EarthCanvasProps {
     onLoad: () => void;
     onProgress: (msg: string) => void;
     onError?: (errorMsg: string) => void;
     onLocationsUpdate?: (locations: ProjectedLocation[]) => void;
+    onCountryLabelsUpdate?: (labels: ProjectedCountryLabel[]) => void;
 }
 
-export function EarthCanvas({ onLoad, onProgress, onError, onLocationsUpdate }: EarthCanvasProps) {
+export function EarthCanvas({ onLoad, onProgress, onError, onLocationsUpdate, onCountryLabelsUpdate }: EarthCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<Engine | null>(null);
     
-    // Store callback in a mutable ref to prevent the engine initialization useEffect 
-    // from triggering again when onLocationsUpdate changes.
+    // Store callbacks in mutable refs to prevent the engine initialization useEffect 
+    // from triggering again when callbacks change.
     const onLocationsUpdateRef = useRef(onLocationsUpdate);
     useEffect(() => {
         onLocationsUpdateRef.current = onLocationsUpdate;
     }, [onLocationsUpdate]);
+
+    const onCountryLabelsUpdateRef = useRef(onCountryLabelsUpdate);
+    useEffect(() => {
+        onCountryLabelsUpdateRef.current = onCountryLabelsUpdate;
+    }, [onCountryLabelsUpdate]);
 
     useEffect(() => {
         if (!canvasRef.current) return;
@@ -30,6 +36,12 @@ export function EarthCanvas({ onLoad, onProgress, onError, onLocationsUpdate }: 
         engineRef.current.onLocationsUpdate = (locations) => {
             if (active && onLocationsUpdateRef.current) {
                 onLocationsUpdateRef.current(locations);
+            }
+        };
+
+        engineRef.current.onCountryLabelsUpdate = (labels) => {
+            if (active && onCountryLabelsUpdateRef.current) {
+                onCountryLabelsUpdateRef.current(labels);
             }
         };
 

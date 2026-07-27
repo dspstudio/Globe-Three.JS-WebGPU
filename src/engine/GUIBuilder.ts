@@ -2,6 +2,7 @@ import GUI from "lil-gui";
 import * as THREE from "three";
 import { CONSTANTS } from "../constants";
 import { CountryBorders } from "./CountryBorders";
+import { CountryLabels } from "./CountryLabels";
 
 export interface GuiOptions {
   tmSettings?: {
@@ -98,6 +99,7 @@ export interface GuiOptions {
     enabled: boolean;
   };
   countryBorders?: CountryBorders | null;
+  countryLabels?: CountryLabels | null;
 }
 
 export function buildGui(gui: GUI, options: GuiOptions) {
@@ -277,6 +279,16 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       .onChange((v: number) => {
         borders.setOpacity(v);
       });
+  }
+
+  if (options.countryLabels) {
+    const labels = options.countryLabels;
+    const labelsFolder = earthGroup.addFolder("Country Labels");
+    labelsFolder.add(labels.settings, "enabled").name("Show Names");
+    labelsFolder.add(labels.settings, "maxVisible", 10, 100, 1).name("Max On Screen");
+    labelsFolder.add(labels.settings, "fadeDistanceFar", 25, 50, 1).name("Far Reveal Zoom");
+    labelsFolder.add(labels.settings, "fadeDistanceMid", 18, 35, 1).name("Mid Reveal Zoom");
+    labelsFolder.add(labels.settings, "fadeDistanceClose", 12, 25, 1).name("Close Reveal Zoom");
   }
 
   earthGroup.add(earthSettings, "trueInclination").name("True Inclination");
@@ -832,6 +844,19 @@ export function buildGui(gui: GUI, options: GuiOptions) {
           AUTO_ROTATE: sunSettings.autoRotate,
           SPEED: sunSettings.speed,
           INCLINATION: sunSettings.inclination,
+        },
+        COUNTRY_BORDERS: {
+          ENABLED: options.countryBorders ? options.countryBorders.settings.enabled : CONSTANTS.GUI.COUNTRY_BORDERS.ENABLED,
+          COLOR: options.countryBorders ? options.countryBorders.settings.color : CONSTANTS.GUI.COUNTRY_BORDERS.COLOR,
+          OPACITY: options.countryBorders ? options.countryBorders.settings.opacity : CONSTANTS.GUI.COUNTRY_BORDERS.OPACITY,
+          ELEVATION: options.countryBorders ? options.countryBorders.settings.elevation : CONSTANTS.GUI.COUNTRY_BORDERS.ELEVATION,
+        },
+        COUNTRY_LABELS: {
+          ENABLED: options.countryLabels ? options.countryLabels.settings.enabled : CONSTANTS.GUI.COUNTRY_LABELS.ENABLED,
+          MAX_VISIBLE: options.countryLabels ? options.countryLabels.settings.maxVisible : CONSTANTS.GUI.COUNTRY_LABELS.MAX_VISIBLE,
+          FADE_DISTANCE_FAR: options.countryLabels ? options.countryLabels.settings.fadeDistanceFar : CONSTANTS.GUI.COUNTRY_LABELS.FADE_DISTANCE_FAR,
+          FADE_DISTANCE_MID: options.countryLabels ? options.countryLabels.settings.fadeDistanceMid : CONSTANTS.GUI.COUNTRY_LABELS.FADE_DISTANCE_MID,
+          FADE_DISTANCE_CLOSE: options.countryLabels ? options.countryLabels.settings.fadeDistanceClose : CONSTANTS.GUI.COUNTRY_LABELS.FADE_DISTANCE_CLOSE,
         },
       };
 
