@@ -75,6 +75,7 @@ export const CONSTANTS = {
       : "./8k_earth_specular_map.jpg",
     NORMAL: use2k ? "./8k_earth_normal_map.jpg" : "./8k_earth_normal_map.jpg",
     CLOUDS: use2k ? "./2k_earth_clouds.jpg" : "./8k_earth_clouds.jpg",
+    RELIEF: "./2k_earth_relief_daymap.png",
     STARS: use2k ? "./starmap_2k.jpg" : "./starmap_8k.jpg",
     MOON_ALBEDO: use2k ? "./2k_moon.jpg" : "./8k_moon.jpg",
     MOON_DISPLACEMENT: use2k ? "./ldem_4.png" : "./ldem_4.png",
@@ -150,6 +151,14 @@ export const CONSTANTS = {
     OCEAN: {
       ROUGHNESS: 0.4,
       METALNESS: 0.05,
+      BATHYMETRY_INTENSITY: 1.0,
+      SHALLOW_COLOR: 0x1ab2ff,
+      DEEP_COLOR: 0x000d33,
+      WATER_CLARITY: 0.5,
+      IOR: 1.333,
+      FRESNEL_STRENGTH: 1.0,
+      SSS_COLOR: 0x00f0ff,
+      SSS_INTENSITY: 0.4,
     },
     EARTH: {
       ROTATION_SPEED: 0.0001,

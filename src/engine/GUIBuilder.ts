@@ -463,6 +463,67 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   oceanFolder
     .add(earth.userData.waterMetalness, "value", 0.0, 1.0)
     .name("Water Metalness");
+  if (earth.userData.waterIor) {
+    oceanFolder
+      .add(earth.userData.waterIor, "value", 1.0, 2.0)
+      .step(0.01)
+      .name("Index of Refraction (IOR)");
+  }
+  if (earth.userData.waterClarity) {
+    oceanFolder
+      .add(earth.userData.waterClarity, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Water Clarity");
+  }
+  if (earth.userData.bathymetryIntensity) {
+    oceanFolder
+      .add(earth.userData.bathymetryIntensity, "value", 0.0, 2.0)
+      .step(0.01)
+      .name("Bathymetry Detail");
+  }
+
+  const oceanColors = {
+    shallow: earth.userData.oceanShallowColor ? earth.userData.oceanShallowColor.value.getHex() : CONSTANTS.GUI.OCEAN.SHALLOW_COLOR,
+    deep: earth.userData.oceanDeepColor ? earth.userData.oceanDeepColor.value.getHex() : CONSTANTS.GUI.OCEAN.DEEP_COLOR,
+    sss: earth.userData.sssColor ? earth.userData.sssColor.value.getHex() : CONSTANTS.GUI.OCEAN.SSS_COLOR,
+  };
+
+  if (earth.userData.oceanShallowColor) {
+    oceanFolder
+      .addColor(oceanColors, "shallow")
+      .name("Shallow Water Color")
+      .onChange((c: any) => {
+        earth.userData.oceanShallowColor.value.set(c);
+      });
+  }
+  if (earth.userData.oceanDeepColor) {
+    oceanFolder
+      .addColor(oceanColors, "deep")
+      .name("Deep Water Color")
+      .onChange((c: any) => {
+        earth.userData.oceanDeepColor.value.set(c);
+      });
+  }
+  if (earth.userData.fresnelStrength) {
+    oceanFolder
+      .add(earth.userData.fresnelStrength, "value", 0.0, 3.0)
+      .step(0.05)
+      .name("Fresnel Strength");
+  }
+  if (earth.userData.sssColor) {
+    oceanFolder
+      .addColor(oceanColors, "sss")
+      .name("SSS Color")
+      .onChange((c: any) => {
+        earth.userData.sssColor.value.set(c);
+      });
+  }
+  if (earth.userData.sssIntensity) {
+    oceanFolder
+      .add(earth.userData.sssIntensity, "value", 0.0, 2.0)
+      .step(0.05)
+      .name("SSS Intensity");
+  }
 
   const terrainFolder = earthGroup.addFolder("Terrain Settings");
   const terrainSettings = {

@@ -17,23 +17,26 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const cutDiscard = positionLocal.x.greaterThan(cutX);
 
     // Load textures
-    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex] = await Promise.all([
+    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, reliefMapTex] = await Promise.all([
         loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
         loader.loadAsync(CONSTANTS.TEXTURES.SPECULAR),
         loader.loadAsync(CONSTANTS.TEXTURES.NORMAL),
         loader.loadAsync(CONSTANTS.TEXTURES.CLOUDS),
-        loader.loadAsync(CONSTANTS.TEXTURES.NIGHT)
+        loader.loadAsync(CONSTANTS.TEXTURES.NIGHT),
+        loader.loadAsync(CONSTANTS.TEXTURES.RELIEF)
     ]);
 
     colorMapTex.colorSpace = THREE.SRGBColorSpace;
     cloudsMapTex.colorSpace = THREE.SRGBColorSpace;
     nightMapTex.colorSpace = THREE.SRGBColorSpace;
+    reliefMapTex.colorSpace = THREE.SRGBColorSpace;
 
     colorMapTex.anisotropy = maxAnisotropy;
     specularMapTex.anisotropy = maxAnisotropy;
     normalMapTex.anisotropy = maxAnisotropy;
     cloudsMapTex.anisotropy = maxAnisotropy;
     nightMapTex.anisotropy = maxAnisotropy;
+    reliefMapTex.anisotropy = maxAnisotropy;
 
     // 1. Earth base
     const geoHigh = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
@@ -86,8 +89,25 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     
     const waterRoughnessUniform = uniform(CONSTANTS.GUI.OCEAN.ROUGHNESS);
     const waterMetalnessUniform = uniform(CONSTANTS.GUI.OCEAN.METALNESS);
+    const bathymetryIntensityUniform = uniform(CONSTANTS.GUI.OCEAN.BATHYMETRY_INTENSITY);
+    const oceanShallowColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.OCEAN.SHALLOW_COLOR));
+    const oceanDeepColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.OCEAN.DEEP_COLOR));
+    const waterClarityUniform = uniform(CONSTANTS.GUI.OCEAN.WATER_CLARITY);
+    const waterIorUniform = uniform(CONSTANTS.GUI.OCEAN.IOR);
+    const fresnelStrengthUniform = uniform(CONSTANTS.GUI.OCEAN.FRESNEL_STRENGTH);
+    const sssColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.OCEAN.SSS_COLOR));
+    const sssIntensityUniform = uniform(CONSTANTS.GUI.OCEAN.SSS_INTENSITY);
+
     group.userData.waterRoughness = waterRoughnessUniform;
     group.userData.waterMetalness = waterMetalnessUniform;
+    group.userData.bathymetryIntensity = bathymetryIntensityUniform;
+    group.userData.oceanShallowColor = oceanShallowColorUniform;
+    group.userData.oceanDeepColor = oceanDeepColorUniform;
+    group.userData.waterClarity = waterClarityUniform;
+    group.userData.waterIor = waterIorUniform;
+    group.userData.fresnelStrength = fresnelStrengthUniform;
+    group.userData.sssColor = sssColorUniform;
+    group.userData.sssIntensity = sssIntensityUniform;
     
     // Calculate shadow dimmer mask
     const cloudShadow = mix(vec3(1.0), shadowColorUniform, shadowOpacity.mul(shadowIntensityUniform));
@@ -176,7 +196,36 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const eclipseDimmer = mix(vec3(1.0), vec3(0.015, 0.02, 0.025), moonEclipseShadow);
     // --------------------------------------------------
 
-    const earthBaseColor = texture(colorMapTex).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer);
+    // --- Optical Ocean & Depth Gradient Shading ---
+    const baseDayTex = texture(colorMapTex);
+    const reliefTex = texture(reliefMapTex);
+    
+    // Depth factor from relief map (brighter = shallow coastal shelf/ridges, darker = deep ocean trenches)
+    const depthVal = reliefTex.r.add(reliefTex.g).add(reliefTex.b).div(3.0);
+    const depthFactor = depthVal.mul(bathymetryIntensityUniform).clamp(0.0, 1.0);
+    
+    // Depth Gradient Color (Deep water vs Shallow water color)
+    const oceanGradientColor = mix(oceanDeepColorUniform, oceanShallowColorUniform, depthFactor);
+    
+    // Water Clarity / Absorption: blend between pure depth gradient colors and underlying day satellite texture
+    const oceanColor = mix(oceanGradientColor, baseDayTex, waterClarityUniform);
+    
+    // Apply custom ocean colors only to ocean areas (where specular mask spec > 0)
+    const finalSurfaceTex = mix(baseDayTex, oceanColor, spec);
+
+    // Fresnel reflection & View direction calculations
+    const viewDirWorld = normalize(cameraPosition.sub(positionWorld));
+    const normWorld = normalize(positionWorld);
+    const cosView = max(float(0.0), dot(normWorld, viewDirWorld));
+    const fresnelVal = pow(float(1.0).sub(cosView), float(3.0)).mul(fresnelStrengthUniform).mul(spec);
+    const fresnelGlow = vec3(0.5, 0.8, 1.0).mul(fresnelVal);
+
+    // Subsurface Scattering (sunlight scattering through shallow water / wave crests)
+    const sunLight = max(float(0.0), dot(normWorld, sunDir));
+    const forwardScatter = pow(max(float(0.0), dot(viewDirWorld, sunDir.negate())), float(2.0)).add(0.4);
+    const sssGlow = sssColorUniform.mul(sssIntensityUniform).mul(sunLight).mul(forwardScatter).mul(depthFactor.add(0.2)).mul(spec);
+
+    const earthBaseColor = finalSurfaceTex.add(fresnelGlow).add(sssGlow).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer);
     earthMaterial.colorNode = Fn(() => {
         Discard(cutDiscard);
         return earthBaseColor;
@@ -190,8 +239,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     earthMaterial.roughnessNode = mix(baseRoughness, float(1.0), moonEclipseShadow);
     earthMaterial.metalnessNode = mix(baseMetalness, float(0.0), moonEclipseShadow);
     earthMaterial.specularColorNode = mix(vec3(1.0), vec3(0.0), moonEclipseShadow);
-    earthMaterial.specularIntensityNode = mix(float(1.0), float(0.0), moonEclipseShadow);
-    earthMaterial.iorNode = mix(float(1.5), float(1.0), moonEclipseShadow);
+    earthMaterial.specularIntensityNode = mix(float(1.0), fresnelStrengthUniform, spec).mul(float(1.0).sub(moonEclipseShadow));
+    earthMaterial.iorNode = mix(float(1.5), waterIorUniform, spec).mul(float(1.0).sub(moonEclipseShadow));
     
     const bumpScaleUniform = uniform(vec2(CONSTANTS.GUI.EARTH.BUMP_SCALE, CONSTANTS.GUI.EARTH.BUMP_SCALE));
     group.userData.bumpScale = bumpScaleUniform;
