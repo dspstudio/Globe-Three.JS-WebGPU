@@ -156,7 +156,7 @@ export const CONSTANTS = {
       DEEP_COLOR: 0x000d33,
       WATER_CLARITY: 0.5,
       IOR: 1.333,
-      FRESNEL_STRENGTH: 1.0,
+      FRESNEL_STRENGTH: 0,
       SSS_COLOR: 0x00f0ff,
       SSS_INTENSITY: 0.4,
       FOAM_THRESHOLD: 0.8,
