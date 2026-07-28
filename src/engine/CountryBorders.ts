@@ -28,7 +28,7 @@ export class CountryBorders {
 
       // First attempt to load local public file
       try {
-        const res = await fetch("./countries.json");
+        const res = await fetch("/countries.json");
         if (res.ok) {
           geojson = await res.json();
         }

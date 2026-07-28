@@ -215,7 +215,18 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // --------------------------------------------------
 
     // --- Optical Ocean & Depth Gradient Shading ---
+    const ndviEnhanceUniform = uniform(CONSTANTS.GUI.EARTH.NDVI_ENHANCE_STRENGTH || 0.3);
+    group.userData.ndviEnhance = ndviEnhanceUniform;
+
     const baseDayTex = texture(colorMapTex);
+    const ndviSample = ndviMapTex ? texture(ndviMapTex) : vec4(0.0);
+
+    // Vegetation density from MODIS NDVI map (higher alpha/greenness on land = dense canopy)
+    const vegFactor = ndviSample.a.mul(float(1.0).sub(spec));
+    // Richer foliage tinting: boost lush green channel & contrast for vibrant vegetation
+    const vegBoostColor = baseDayTex.mul(vec3(0.82, 1.25, 0.88));
+    const landDayTex = mix(baseDayTex, vegBoostColor, vegFactor.mul(ndviEnhanceUniform));
+
     const reliefTex = texture(reliefMapTex);
     
     // Depth factor from relief map (brighter = shallow coastal shelf/ridges, darker = deep ocean trenches)
@@ -226,10 +237,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const oceanGradientColor = mix(oceanDeepColorUniform, oceanShallowColorUniform, depthFactor);
     
     // Water Clarity / Absorption: blend between pure depth gradient colors and underlying day satellite texture
-    const oceanColor = mix(oceanGradientColor, baseDayTex, waterClarityUniform);
+    const oceanColor = mix(oceanGradientColor, landDayTex, waterClarityUniform);
     
     // Apply custom ocean colors only to ocean areas (where specular mask spec > 0)
-    const oceanSurfaceTex = mix(baseDayTex, oceanColor, spec);
+    const oceanSurfaceTex = mix(landDayTex, oceanColor, spec);
 
     // Coastal Shelf Foam (subtle brightened shelf outline along shallow shorelines)
     const foamMin = foamThresholdUniform.sub(coastalFadeDistanceUniform);
@@ -257,7 +268,6 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     group.userData.gibsLayer = gibsLayerUniform;
 
     const sstSample = sstMapTex ? texture(sstMapTex) : vec4(0.0);
-    const ndviSample = ndviMapTex ? texture(ndviMapTex) : vec4(0.0);
     const gibsSample = mix(sstSample, ndviSample, gibsLayerUniform);
     const gibsFactor = gibsEnabledUniform.mul(gibsOpacityUniform).mul(gibsSample.a);
 
@@ -279,8 +289,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     })() as any;
     
     // Specular map for water reflections: white spec = water, black spec = land
-    // Land roughness is modulated by bump_map elevation
-    const landRoughnessMap = mix(landRoughnessUniform.mul(0.6), landRoughnessUniform, bumpVal);
+    // Land roughness is modulated by bump_map elevation and NDVI vegetation density
+    const landRoughnessMap = mix(landRoughnessUniform.mul(0.6), landRoughnessUniform, bumpVal).add(vegFactor.mul(ndviEnhanceUniform).mul(0.15)).clamp(0.0, 1.0);
     const baseRoughness = mix(landRoughnessMap, waterRoughnessUniform, spec);
     const baseMetalness = mix(0.0, waterMetalnessUniform, spec);
     

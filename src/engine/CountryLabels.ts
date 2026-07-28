@@ -43,7 +43,7 @@ export class CountryLabels {
       let geojson: any = null;
 
       try {
-        const res = await fetch("./countries.json");
+        const res = await fetch("/countries.json");
         if (res.ok) {
           geojson = await res.json();
         }
