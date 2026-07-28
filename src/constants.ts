@@ -73,9 +73,9 @@ export const CONSTANTS = {
     SPECULAR: use2k
       ? "./2k_earth_specular_map.jpg"
       : "./8k_earth_specular_map.jpg",
-    NORMAL: use2k ? "./8k_earth_normal_map.jpg" : "./8k_earth_normal_map.jpg",
+    NORMAL: use2k ? "./2k_earth_normal_map.jpg" : "./8k_earth_normal_map.jpg",
     CLOUDS: use2k ? "./2k_earth_clouds.jpg" : "./8k_earth_clouds.jpg",
-    RELIEF: "./2k_earth_relief_daymap.png",
+    RELIEF: use2k ? "./2k_earth_relief_daymap.jpg" : "./8k_earth_relief_daymap.jpg",
     STARS: use2k ? "./starmap_2k.jpg" : "./starmap_8k.jpg",
     MOON_ALBEDO: use2k ? "./2k_moon.jpg" : "./8k_moon.jpg",
     MOON_DISPLACEMENT: use2k ? "./ldem_4.png" : "./ldem_4.png",
