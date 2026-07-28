@@ -87,14 +87,15 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const rotAngle = cloudRotationYUniform;
     const cosR = cos(rotAngle);
     const sinR = sin(rotAngle);
-    const rotX = shadowPosLocal.x.mul(cosR).sub(shadowPosLocal.z.mul(sinR));
-    const rotZ = shadowPosLocal.x.mul(sinR).add(shadowPosLocal.z.mul(cosR));
+    const rotX = shadowPosLocal.x.mul(cosR).add(shadowPosLocal.z.mul(sinR));
+    const rotZ = shadowPosLocal.x.mul(sinR).negate().add(shadowPosLocal.z.mul(cosR));
     const shadowPosRotated = vec3(rotX, shadowPosLocal.y, rotZ);
 
-    // Map 3D unit direction on cloud sphere to equirectangular UV matching SphereGeometry
-    const normShadowPos = normalize(shadowPosRotated);
-    const shadowU = atan(normShadowPos.x, normShadowPos.z).div(Math.PI * 2.0).add(0.5);
-    const shadowV = asin(clamp(normShadowPos.y, -1.0, 1.0)).div(Math.PI).add(0.5);
+    // Map 3D unit direction on cloud sphere to exact SphereGeometry UVs
+    const normP = normalize(shadowPosRotated);
+    const angleU = atan(normP.z, normP.x.negate());
+    const shadowU = angleU.div(Math.PI * 2.0).add(select(angleU.lessThan(0.0), 1.0, 0.0));
+    const shadowV = asin(clamp(normP.y, -1.0, 1.0)).div(Math.PI).add(0.5);
     const shadowUv = vec2(shadowU, shadowV);
 
     const shadowOpacity = texture(cloudsMapTex, shadowUv).r;
