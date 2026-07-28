@@ -71,12 +71,14 @@ export const CONSTANTS = {
     ALBEDO: use2k ? "./2k_earth_daymap.jpg" : "./8k_earth_daymap.jpg",
     NIGHT: use2k ? "./2k_earth_nightmap.jpg" : "./8k_earth_nightmap.jpg",
     SPECULAR: use2k
-      ? "./2k_earth_specular_map.jpg"
-      : "./8k_earth_specular_map.jpg",
-    NORMAL: use2k ? "./2k_earth_normal_map.jpg" : "./8k_earth_normal_map.jpg",
+      ? "./2k_earth_specular_map.png"
+      : "./8k_earth_specular_map.png",
+    NORMAL: use2k ? "./2k_earth_normal_map.png" : "./8k_earth_normal_map.png",
     BUMP: use2k ? "./2k_earth_bump_map.png" : "./8k_earth_bump_map.png",
     CLOUDS: use2k ? "./2k_earth_clouds.jpg" : "./8k_earth_clouds.jpg",
     RELIEF: use2k ? "./2k_earth_relief_daymap.jpg" : "./8k_earth_relief_daymap.jpg",
+    SST_ANOMALIES: "./GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies.png",
+    MODIS_NDVI: "./MODIS_Terra_NDVI_8Day.png",
     STARS: use2k ? "./starmap_2k.jpg" : "./starmap_8k.jpg",
     MOON_ALBEDO: use2k ? "./2k_moon.jpg" : "./8k_moon.jpg",
     MOON_DISPLACEMENT: use2k ? "./ldem_4.png" : "./ldem_4.png",
@@ -169,6 +171,9 @@ export const CONSTANTS = {
       BUMP_SCALE: 5.0,
       DISPLACEMENT_SCALE: 0.02,
       LAND_ROUGHNESS: 1,
+      GIBS_ENABLED: false,
+      GIBS_LAYER: "Sea Surface Temp Anomalies",
+      GIBS_OPACITY: 0.8,
       TERRAIN_SHADOW_INTENSITY: 1.0,
       TERRAIN_SHADOW_OFFSET: 0.002,
       TRUE_INCLINATION: false,

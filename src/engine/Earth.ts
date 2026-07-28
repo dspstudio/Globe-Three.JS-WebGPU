@@ -17,20 +17,30 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const cutDiscard = positionLocal.x.greaterThan(cutX);
 
     // Load textures
-    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, reliefMapTex, bumpMapTex] = await Promise.all([
+    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, reliefMapTex, bumpMapTex, sstMapTex, ndviMapTex] = await Promise.all([
         loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
         loader.loadAsync(CONSTANTS.TEXTURES.SPECULAR),
         loader.loadAsync(CONSTANTS.TEXTURES.NORMAL),
         loader.loadAsync(CONSTANTS.TEXTURES.CLOUDS),
         loader.loadAsync(CONSTANTS.TEXTURES.NIGHT),
         loader.loadAsync(CONSTANTS.TEXTURES.RELIEF),
-        loader.loadAsync(CONSTANTS.TEXTURES.BUMP)
+        loader.loadAsync(CONSTANTS.TEXTURES.BUMP),
+        loader.loadAsync(CONSTANTS.TEXTURES.SST_ANOMALIES).catch(() => null),
+        loader.loadAsync(CONSTANTS.TEXTURES.MODIS_NDVI).catch(() => null)
     ]);
 
     colorMapTex.colorSpace = THREE.SRGBColorSpace;
     cloudsMapTex.colorSpace = THREE.SRGBColorSpace;
     nightMapTex.colorSpace = THREE.SRGBColorSpace;
     reliefMapTex.colorSpace = THREE.SRGBColorSpace;
+    if (sstMapTex) {
+        sstMapTex.colorSpace = THREE.SRGBColorSpace;
+        sstMapTex.anisotropy = maxAnisotropy;
+    }
+    if (ndviMapTex) {
+        ndviMapTex.colorSpace = THREE.SRGBColorSpace;
+        ndviMapTex.anisotropy = maxAnisotropy;
+    }
 
     colorMapTex.anisotropy = maxAnisotropy;
     specularMapTex.anisotropy = maxAnisotropy;
@@ -238,6 +248,19 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const forwardScatter = pow(max(float(0.0), dot(viewDirWorld, sunDir.negate())), float(2.0)).add(0.4);
     const sssGlow = sssColorUniform.mul(sssIntensityUniform).mul(sunLight).mul(forwardScatter).mul(depthFactor.add(0.2)).mul(spec);
 
+    // SST / GIBS Data Overlay
+    const gibsEnabledUniform = uniform(CONSTANTS.GUI.EARTH.GIBS_ENABLED ? 1.0 : 0.0);
+    const gibsOpacityUniform = uniform(CONSTANTS.GUI.EARTH.GIBS_OPACITY || 0.8);
+    const gibsLayerUniform = uniform(CONSTANTS.GUI.EARTH.GIBS_LAYER === "MODIS Terra NDVI 8-Day" ? 1.0 : 0.0);
+    group.userData.gibsEnabled = gibsEnabledUniform;
+    group.userData.gibsOpacity = gibsOpacityUniform;
+    group.userData.gibsLayer = gibsLayerUniform;
+
+    const sstSample = sstMapTex ? texture(sstMapTex) : vec4(0.0);
+    const ndviSample = ndviMapTex ? texture(ndviMapTex) : vec4(0.0);
+    const gibsSample = mix(sstSample, ndviSample, gibsLayerUniform);
+    const gibsFactor = gibsEnabledUniform.mul(gibsOpacityUniform).mul(gibsSample.a);
+
     const displacementScaleUniform = uniform(CONSTANTS.GUI.EARTH.DISPLACEMENT_SCALE || 0.02);
     const landRoughnessUniform = uniform(CONSTANTS.GUI.EARTH.LAND_ROUGHNESS || 0.8);
     group.userData.displacementScale = displacementScaleUniform;
@@ -247,7 +270,9 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const bumpVal = texture(bumpMapTex).r;
     earthMaterial.positionNode = positionLocal.add(normalize(positionLocal).mul(bumpVal.mul(displacementScaleUniform)));
 
-    const earthBaseColor = finalSurfaceTex.add(fresnelGlow).add(sssGlow).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer);
+    const rawLitEarthColor = finalSurfaceTex.add(fresnelGlow).add(sssGlow).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer);
+    const earthBaseColor = mix(rawLitEarthColor, vec3(0.0), gibsFactor);
+
     earthMaterial.colorNode = Fn(() => {
         Discard(cutDiscard);
         return earthBaseColor;
@@ -277,7 +302,9 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // Multiplier dictates how deeply the lights bloom
     const nightLights = texture(nightMapTex).mul(nightFade).mul(cityLightsUniform);
     const darkSideAmbient = texture(colorMapTex).mul(nightFade).mul(darkSideBrightnessUniform).mul(0.5);
-    earthMaterial.emissiveNode = nightLights.add(darkSideAmbient) as any;
+    const baseEmissive = nightLights.add(darkSideAmbient).mul(float(1.0).sub(gibsFactor));
+    const gibsEmissive = gibsSample.rgb.mul(gibsFactor);
+    earthMaterial.emissiveNode = baseEmissive.add(gibsEmissive) as any;
     
     const earthHigh = new THREE.Mesh(geoHigh, earthMaterial);
     const earthMed = new THREE.Mesh(geoMed, earthMaterial);

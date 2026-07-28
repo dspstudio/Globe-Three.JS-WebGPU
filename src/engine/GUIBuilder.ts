@@ -572,6 +572,33 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     .add(earth.userData.terrainShadowOffset, "value", 0.0001, 0.01)
     .name("Self-Shadow Offset");
 
+  if (earth.userData.gibsEnabled && earth.userData.gibsOpacity) {
+    const gibsFolder = earthGroup.addFolder("GIBS Data Overlays");
+    const gibsState = {
+      enabled: earth.userData.gibsEnabled.value > 0.5,
+      layer: earth.userData.gibsLayer.value > 0.5 ? "MODIS Terra NDVI 8-Day" : "Sea Surface Temp Anomalies"
+    };
+    
+    gibsFolder
+      .add(gibsState, "layer", ["Sea Surface Temp Anomalies", "MODIS Terra NDVI 8-Day"])
+      .name("Layer")
+      .onChange((v: string) => {
+        earth.userData.gibsLayer.value = v === "MODIS Terra NDVI 8-Day" ? 1.0 : 0.0;
+      });
+
+    gibsFolder
+      .add(gibsState, "enabled")
+      .name("Show Overlay")
+      .onChange((v: boolean) => {
+        earth.userData.gibsEnabled.value = v ? 1.0 : 0.0;
+      });
+
+    gibsFolder
+      .add(earth.userData.gibsOpacity, "value", 0.0, 1.0)
+      .step(0.05)
+      .name("Opacity");
+  }
+
   if (satelliteSettings) {
     const satGroup = earthGroup.addFolder("Satellites");
     
