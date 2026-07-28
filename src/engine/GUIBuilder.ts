@@ -553,6 +553,18 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     .onChange((v: number) => {
       earth.userData.bumpScale.value.set(v, v);
     });
+  if (earth.userData.displacementScale) {
+    terrainFolder
+      .add(earth.userData.displacementScale, "value", 0.0, 0.2)
+      .step(0.005)
+      .name("Displacement Scale");
+  }
+  if (earth.userData.landRoughness) {
+    terrainFolder
+      .add(earth.userData.landRoughness, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Land Roughness");
+  }
   terrainFolder
     .add(earth.userData.terrainShadowIntensity, "value", 0.0, 5.0)
     .name("Self-Shadow Intensity");

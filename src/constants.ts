@@ -74,6 +74,7 @@ export const CONSTANTS = {
       ? "./2k_earth_specular_map.jpg"
       : "./8k_earth_specular_map.jpg",
     NORMAL: use2k ? "./2k_earth_normal_map.jpg" : "./8k_earth_normal_map.jpg",
+    BUMP: use2k ? "./2k_earth_bump_map.png" : "./8k_earth_bump_map.png",
     CLOUDS: use2k ? "./2k_earth_clouds.jpg" : "./8k_earth_clouds.jpg",
     RELIEF: use2k ? "./2k_earth_relief_daymap.jpg" : "./8k_earth_relief_daymap.jpg",
     STARS: use2k ? "./starmap_2k.jpg" : "./starmap_8k.jpg",
@@ -166,6 +167,8 @@ export const CONSTANTS = {
     EARTH: {
       ROTATION_SPEED: 0.0001,
       BUMP_SCALE: 5.0,
+      DISPLACEMENT_SCALE: 0.02,
+      LAND_ROUGHNESS: 1,
       TERRAIN_SHADOW_INTENSITY: 1.0,
       TERRAIN_SHADOW_OFFSET: 0.002,
       TRUE_INCLINATION: false,

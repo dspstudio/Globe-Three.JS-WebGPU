@@ -17,13 +17,14 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const cutDiscard = positionLocal.x.greaterThan(cutX);
 
     // Load textures
-    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, reliefMapTex] = await Promise.all([
+    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, reliefMapTex, bumpMapTex] = await Promise.all([
         loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
         loader.loadAsync(CONSTANTS.TEXTURES.SPECULAR),
         loader.loadAsync(CONSTANTS.TEXTURES.NORMAL),
         loader.loadAsync(CONSTANTS.TEXTURES.CLOUDS),
         loader.loadAsync(CONSTANTS.TEXTURES.NIGHT),
-        loader.loadAsync(CONSTANTS.TEXTURES.RELIEF)
+        loader.loadAsync(CONSTANTS.TEXTURES.RELIEF),
+        loader.loadAsync(CONSTANTS.TEXTURES.BUMP)
     ]);
 
     colorMapTex.colorSpace = THREE.SRGBColorSpace;
@@ -37,6 +38,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     cloudsMapTex.anisotropy = maxAnisotropy;
     nightMapTex.anisotropy = maxAnisotropy;
     reliefMapTex.anisotropy = maxAnisotropy;
+    bumpMapTex.anisotropy = maxAnisotropy;
 
     // 1. Earth base
     const geoHigh = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
@@ -236,6 +238,15 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const forwardScatter = pow(max(float(0.0), dot(viewDirWorld, sunDir.negate())), float(2.0)).add(0.4);
     const sssGlow = sssColorUniform.mul(sssIntensityUniform).mul(sunLight).mul(forwardScatter).mul(depthFactor.add(0.2)).mul(spec);
 
+    const displacementScaleUniform = uniform(CONSTANTS.GUI.EARTH.DISPLACEMENT_SCALE || 0.02);
+    const landRoughnessUniform = uniform(CONSTANTS.GUI.EARTH.LAND_ROUGHNESS || 0.8);
+    group.userData.displacementScale = displacementScaleUniform;
+    group.userData.landRoughness = landRoughnessUniform;
+
+    // Apply vertex displacement map from bump_map texture
+    const bumpVal = texture(bumpMapTex).r;
+    earthMaterial.positionNode = positionLocal.add(normalize(positionLocal).mul(bumpVal.mul(displacementScaleUniform)));
+
     const earthBaseColor = finalSurfaceTex.add(fresnelGlow).add(sssGlow).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer);
     earthMaterial.colorNode = Fn(() => {
         Discard(cutDiscard);
@@ -243,7 +254,9 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     })() as any;
     
     // Specular map for water reflections: white spec = water, black spec = land
-    const baseRoughness = mix(0.9, waterRoughnessUniform, spec);
+    // Land roughness is modulated by bump_map elevation
+    const landRoughnessMap = mix(landRoughnessUniform.mul(0.6), landRoughnessUniform, bumpVal);
+    const baseRoughness = mix(landRoughnessMap, waterRoughnessUniform, spec);
     const baseMetalness = mix(0.0, waterMetalnessUniform, spec);
     
     // Completely kill the specular highlight of the directional sun light in the umbra
