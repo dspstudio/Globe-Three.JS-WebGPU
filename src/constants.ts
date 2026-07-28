@@ -159,6 +159,9 @@ export const CONSTANTS = {
       FRESNEL_STRENGTH: 1.0,
       SSS_COLOR: 0x00f0ff,
       SSS_INTENSITY: 0.4,
+      FOAM_THRESHOLD: 0.8,
+      FOAM_INTENSITY: 0.25,
+      COASTAL_FADE_DISTANCE: 0.1,
     },
     EARTH: {
       ROTATION_SPEED: 0.0001,

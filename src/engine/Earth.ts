@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, atan, sub, float, min, bumpMap, Discard, select, Fn, clamp, cos, sin } from 'three/tsl';
+import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, atan, sub, float, min, bumpMap, Discard, select, Fn, clamp, cos, sin, time } from 'three/tsl';
 import { MeshStandardNodeMaterial, MeshBasicNodeMaterial, MeshPhysicalNodeMaterial } from 'three/webgpu';
 import { CONSTANTS } from '../constants';
 import { createInnerLayers } from './InnerLayers';
@@ -97,6 +97,9 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const fresnelStrengthUniform = uniform(CONSTANTS.GUI.OCEAN.FRESNEL_STRENGTH);
     const sssColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.OCEAN.SSS_COLOR));
     const sssIntensityUniform = uniform(CONSTANTS.GUI.OCEAN.SSS_INTENSITY);
+    const foamThresholdUniform = uniform(CONSTANTS.GUI.OCEAN.FOAM_THRESHOLD);
+    const foamIntensityUniform = uniform(CONSTANTS.GUI.OCEAN.FOAM_INTENSITY);
+    const coastalFadeDistanceUniform = uniform(CONSTANTS.GUI.OCEAN.COASTAL_FADE_DISTANCE);
 
     group.userData.waterRoughness = waterRoughnessUniform;
     group.userData.waterMetalness = waterMetalnessUniform;
@@ -108,6 +111,9 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     group.userData.fresnelStrength = fresnelStrengthUniform;
     group.userData.sssColor = sssColorUniform;
     group.userData.sssIntensity = sssIntensityUniform;
+    group.userData.foamThreshold = foamThresholdUniform;
+    group.userData.foamIntensity = foamIntensityUniform;
+    group.userData.coastalFadeDistance = coastalFadeDistanceUniform;
     
     // Calculate shadow dimmer mask
     const cloudShadow = mix(vec3(1.0), shadowColorUniform, shadowOpacity.mul(shadowIntensityUniform));
@@ -211,7 +217,12 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const oceanColor = mix(oceanGradientColor, baseDayTex, waterClarityUniform);
     
     // Apply custom ocean colors only to ocean areas (where specular mask spec > 0)
-    const finalSurfaceTex = mix(baseDayTex, oceanColor, spec);
+    const oceanSurfaceTex = mix(baseDayTex, oceanColor, spec);
+
+    // Coastal Shelf Foam (subtle brightened shelf outline along shallow shorelines)
+    const foamMin = foamThresholdUniform.sub(coastalFadeDistanceUniform);
+    const coastalFoamMask = smoothstep(foamMin, foamThresholdUniform, depthFactor).mul(spec);
+    const finalSurfaceTex = mix(oceanSurfaceTex, vec3(0.95, 0.98, 1.0), coastalFoamMask.mul(foamIntensityUniform));
 
     // Fresnel reflection & View direction calculations
     const viewDirWorld = normalize(cameraPosition.sub(positionWorld));

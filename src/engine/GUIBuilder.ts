@@ -524,6 +524,24 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       .step(0.05)
       .name("SSS Intensity");
   }
+  if (earth.userData.foamThreshold) {
+    oceanFolder
+      .add(earth.userData.foamThreshold, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Foam Threshold");
+  }
+  if (earth.userData.foamIntensity) {
+    oceanFolder
+      .add(earth.userData.foamIntensity, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Foam Intensity");
+  }
+  if (earth.userData.coastalFadeDistance) {
+    oceanFolder
+      .add(earth.userData.coastalFadeDistance, "value", 0.001, 0.5)
+      .step(0.005)
+      .name("Coastal Fade Distance");
+  }
 
   const terrainFolder = earthGroup.addFolder("Terrain Settings");
   const terrainSettings = {
