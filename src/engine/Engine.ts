@@ -65,7 +65,13 @@ export class Engine {
   private moonPosUniform: any;
   private flarePosUniform: any;
   private flareIntensityUniform: any;
-  private flareSettings: { enabled: boolean; intensity: number };
+  private flareSettings: {
+    enabled: boolean;
+    intensity: number;
+    enterDistance: number;
+    leaveDistance: number;
+    fadeDuration: number;
+  };
   private anamorphicIntensityUniform: any;
   private anamorphicSizeUniform: any;
   private anamorphicThicknessUniform: any;
@@ -494,6 +500,9 @@ export class Engine {
     this.flareSettings = {
       enabled: CONSTANTS.GUI.LENS_FLARE.ENABLED,
       intensity: CONSTANTS.GUI.LENS_FLARE.INTENSITY,
+      enterDistance: CONSTANTS.GUI.LENS_FLARE.ENTER_DISTANCE ?? 0.0,
+      leaveDistance: CONSTANTS.GUI.LENS_FLARE.LEAVE_DISTANCE ?? 0.0,
+      fadeDuration: CONSTANTS.GUI.LENS_FLARE.FADE_DURATION ?? 0.0,
     };
 
     this.earthSettings = {

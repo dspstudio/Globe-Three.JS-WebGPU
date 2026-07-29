@@ -323,8 +323,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     // 2. Clouds
     const cloudsGeoHigh = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.05, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
-    const cloudsGeoMed = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.05, Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)));
-    const cloudsGeoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.05, Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)), Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)));
+    const cloudsGeoMed = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.05, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
+    const cloudsGeoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.05, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
     const cloudsMaterial = new MeshPhysicalNodeMaterial();
     
     const finalCloudOpacity = texture(cloudsMapTex).r;
@@ -369,8 +369,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // 3. Atmosphere (Outer Halo)
     // Renders behind the earth and extends outward to create a volumetric halo 
     const atmosGeoHigh = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
-    const atmosGeoMed = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)));
-    const atmosGeoLow = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)), Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)));
+    const atmosGeoMed = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
+    const atmosGeoLow = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
     const atmosMaterial = new MeshBasicNodeMaterial();
     atmosMaterial.transparent = true;
     atmosMaterial.side = THREE.BackSide;
@@ -459,8 +459,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // A thin localized front-faced glow that sits right on the earth's surface
     // to blend the silhouette into the outer halo.
     const innerAtmosGeoHigh = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
-    const innerAtmosGeoMed = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(16, Math.floor(CONSTANTS.SEGMENTS / 2)));
-    const innerAtmosGeoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)), Math.max(8, Math.floor(CONSTANTS.SEGMENTS / 4)));
+    const innerAtmosGeoMed = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
+    const innerAtmosGeoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
     const innerAtmosMaterial = new MeshBasicNodeMaterial();
     innerAtmosMaterial.transparent = true;
     innerAtmosMaterial.side = THREE.FrontSide;

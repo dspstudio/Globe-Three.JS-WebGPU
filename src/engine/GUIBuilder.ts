@@ -41,7 +41,13 @@ export interface GuiOptions {
     angle: number;
   };
   moonMesh: THREE.Object3D;
-  flareSettings: { enabled: boolean; intensity: number };
+  flareSettings: {
+    enabled: boolean;
+    intensity: number;
+    enterDistance: number;
+    leaveDistance: number;
+    fadeDuration: number;
+  };
   anamorphicSettings: {
     enabled: boolean;
     intensity: number;
@@ -710,6 +716,18 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   const flareFolder = postGroup.addFolder("Lens Flare");
   flareFolder.add(flareSettings, "enabled").name("Enabled");
   flareFolder.add(flareSettings, "intensity", 0.0, 1.0).name("Intensity");
+  flareFolder
+    .add(flareSettings, "enterDistance", -5.0, 5.0)
+    .step(0.01)
+    .name("Enter Distance");
+  flareFolder
+    .add(flareSettings, "leaveDistance", -5.0, 5.0)
+    .step(0.01)
+    .name("Leave Distance");
+  flareFolder
+    .add(flareSettings, "fadeDuration", 0.0, 3.0)
+    .step(0.05)
+    .name("Fade Duration (s)");
 
   const anaFolder = postGroup.addFolder("Anamorphic Eclipse Flare");
   anaFolder.add(anamorphicSettings, "enabled").name("Enabled");
@@ -906,6 +924,9 @@ export function buildGui(gui: GUI, options: GuiOptions) {
         LENS_FLARE: {
           ENABLED: flareSettings.enabled,
           INTENSITY: flareSettings.intensity,
+          ENTER_DISTANCE: flareSettings.enterDistance,
+          LEAVE_DISTANCE: flareSettings.leaveDistance,
+          FADE_DURATION: flareSettings.fadeDuration,
         },
         ANAMORPHIC: {
           ENABLED: anamorphicSettings.enabled,

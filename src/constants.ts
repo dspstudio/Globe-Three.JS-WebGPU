@@ -113,6 +113,9 @@ export const CONSTANTS = {
     LENS_FLARE: {
       ENABLED: true,
       INTENSITY: 0.15,
+      ENTER_DISTANCE: 0.0,
+      LEAVE_DISTANCE: 0.0,
+      FADE_DURATION: 0.0,
     },
     ANAMORPHIC: {
       ENABLED: false,
@@ -168,7 +171,7 @@ export const CONSTANTS = {
     },
     EARTH: {
       ROTATION_SPEED: 0.0001,
-      BUMP_SCALE: 5.0,
+      BUMP_SCALE: 2.0,
       DISPLACEMENT_SCALE: 0.02,
       LAND_ROUGHNESS: 1,
       NDVI_ENHANCE_STRENGTH: 0.3,

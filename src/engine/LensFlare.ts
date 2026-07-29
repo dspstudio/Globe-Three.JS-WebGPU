@@ -211,12 +211,23 @@ export function anamorphicShader(args: any) {
 
 
 
+let lastDistToCenter: number | null = null;
+let lastIsEntering = true;
+let currentOcclusion = 1.0;
+let lastOcclusionTime = performance.now();
+
 export function updateLensFlare(
   sunMesh: THREE.Mesh,
   camera: THREE.PerspectiveCamera,
   flarePosUniform: any,
   flareIntensityUniform: any,
-  flareSettings: { enabled: boolean; intensity: number },
+  flareSettings: {
+    enabled: boolean;
+    intensity: number;
+    enterDistance?: number;
+    leaveDistance?: number;
+    fadeDuration?: number;
+  },
   moonMesh?: THREE.Object3D,
   moonSettings?: { enabled: boolean },
   anamorphicIntensityUniform?: any,
@@ -236,9 +247,6 @@ export function updateLensFlare(
   )
     return;
 
-  const p = sunMesh.position.clone();
-  p.project(camera);
-
   const sunDist = sunMesh.position.distanceTo(camera.position);
   const sunDir = sunMesh.position.clone().sub(camera.position).normalize();
   const centerToRay = camera.position.clone().negate();
@@ -246,6 +254,7 @@ export function updateLensFlare(
 
   let occlusion = 1.0;
   let anamorphicOcclusionFactor = 0.0;
+  let flarePoint = sunMesh.position.clone();
 
   // If projectionLength > 0, the earth is in front of the camera towards the sun
   if (projectionLength > 0 && projectionLength < sunDist) {
@@ -253,14 +262,37 @@ export function updateLensFlare(
       .clone()
       .add(sunDir.clone().multiplyScalar(projectionLength));
     const distToCenter = closestPoint.length();
-    const radius = CONSTANTS.EARTH_RADIUS * 1.02; // slight padding for atmosphere
+
+    // Track direction of movement relative to Earth center (entering vs leaving)
+    let isEntering = lastIsEntering;
+    if (lastDistToCenter !== null) {
+      const diff = distToCenter - lastDistToCenter;
+      if (Math.abs(diff) > 0.00001) {
+        isEntering = diff < 0; // Distance decreasing = entering behind Earth
+        lastIsEntering = isEntering;
+      }
+    }
+    lastDistToCenter = distToCenter;
+
+    const baseRadius = CONSTANTS.EARTH_RADIUS * 1.02; // slight padding for atmosphere
+    const distOffset = isEntering
+      ? (flareSettings.enterDistance ?? 0.0)
+      : (flareSettings.leaveDistance ?? 0.0);
+
+    const radius = Math.max(0.1, baseRadius + distOffset);
+    const fadeRange = baseRadius * 0.05;
 
     if (distToCenter < radius) {
       // Fully occluded
       occlusion = 0.0;
-    } else if (distToCenter < radius * 1.05) {
+    } else if (distToCenter < radius + fadeRange) {
       // Fade out
-      occlusion = (distToCenter - radius) / (radius * 0.05);
+      occlusion = (distToCenter - radius) / fadeRange;
+    }
+
+    // If sun is behind Earth's disk, clamp the flare origin to Earth's outer limb
+    if (distToCenter < baseRadius && distToCenter > 0.0001) {
+      flarePoint = closestPoint.clone().normalize().multiplyScalar(baseRadius);
     }
 
     // Anamorphic appears when sun is grazing the edge (diamond ring effect)
@@ -375,17 +407,32 @@ export function updateLensFlare(
     }
   }
 
+  const p = flarePoint.project(camera);
+
   if (p.z > 1.0) {
     flarePosUniform.value.set(-999, -999);
   } else {
     flarePosUniform.value.set(p.x * 0.5 * camera.aspect, -p.y * 0.5);
   }
 
+  const now = performance.now();
+  const dt = Math.min((now - lastOcclusionTime) / 1000.0, 0.1);
+  lastOcclusionTime = now;
+
+  let targetOcclusion = occlusion;
   if (!flareSettings.enabled) {
-    occlusion = 0.0;
+    targetOcclusion = 0.0;
   }
 
-  flareIntensityUniform.value = flareSettings.intensity * occlusion;
+  const fadeDuration = flareSettings.fadeDuration ?? 0.0;
+  if (fadeDuration <= 0.001) {
+    currentOcclusion = targetOcclusion;
+  } else {
+    const factor = 1.0 - Math.exp(-dt / Math.max(0.01, fadeDuration * 0.5));
+    currentOcclusion += (targetOcclusion - currentOcclusion) * Math.min(1.0, factor);
+  }
+
+  flareIntensityUniform.value = flareSettings.intensity * currentOcclusion;
 
   if (anamorphicIntensityUniform && anamorphicSettings) {
     if (!anamorphicSettings.enabled) {
