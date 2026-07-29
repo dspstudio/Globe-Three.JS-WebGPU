@@ -17,22 +17,21 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const cutDiscard = positionLocal.x.greaterThan(cutX);
 
     // Load textures
-    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, reliefMapTex, bumpMapTex, sstMapTex, ndviMapTex] = await Promise.all([
+    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, bumpMapTex, sstMapTex, ndviMapTex, bathymetryMapTex] = await Promise.all([
         loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
         loader.loadAsync(CONSTANTS.TEXTURES.SPECULAR),
         loader.loadAsync(CONSTANTS.TEXTURES.NORMAL),
         loader.loadAsync(CONSTANTS.TEXTURES.CLOUDS),
         loader.loadAsync(CONSTANTS.TEXTURES.NIGHT),
-        loader.loadAsync(CONSTANTS.TEXTURES.RELIEF),
         loader.loadAsync(CONSTANTS.TEXTURES.BUMP),
         loader.loadAsync(CONSTANTS.TEXTURES.SST_ANOMALIES).catch(() => null),
-        loader.loadAsync(CONSTANTS.TEXTURES.MODIS_NDVI).catch(() => null)
+        loader.loadAsync(CONSTANTS.TEXTURES.MODIS_NDVI).catch(() => null),
+        loader.loadAsync(CONSTANTS.TEXTURES.BATHYMETRY).catch(() => null)
     ]);
 
     colorMapTex.colorSpace = THREE.SRGBColorSpace;
     cloudsMapTex.colorSpace = THREE.SRGBColorSpace;
     nightMapTex.colorSpace = THREE.SRGBColorSpace;
-    reliefMapTex.colorSpace = THREE.SRGBColorSpace;
     if (sstMapTex) {
         sstMapTex.colorSpace = THREE.SRGBColorSpace;
         sstMapTex.anisotropy = maxAnisotropy;
@@ -41,13 +40,16 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
         ndviMapTex.colorSpace = THREE.SRGBColorSpace;
         ndviMapTex.anisotropy = maxAnisotropy;
     }
+    if (bathymetryMapTex) {
+        bathymetryMapTex.colorSpace = THREE.SRGBColorSpace;
+        bathymetryMapTex.anisotropy = maxAnisotropy;
+    }
 
     colorMapTex.anisotropy = maxAnisotropy;
     specularMapTex.anisotropy = maxAnisotropy;
     normalMapTex.anisotropy = maxAnisotropy;
     cloudsMapTex.anisotropy = maxAnisotropy;
     nightMapTex.anisotropy = maxAnisotropy;
-    reliefMapTex.anisotropy = maxAnisotropy;
     bumpMapTex.anisotropy = maxAnisotropy;
 
     // 1. Earth base
@@ -228,10 +230,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const vegBoostColor = baseDayTex.mul(vec3(0.82, 1.25, 0.88));
     const landDayTex = mix(baseDayTex, vegBoostColor, vegFactor.mul(ndviEnhanceUniform));
 
-    const reliefTex = texture(reliefMapTex);
+    const bathymetrySample = bathymetryMapTex ? texture(bathymetryMapTex) : texture(bumpMapTex);
     
-    // Depth factor from relief map (brighter = shallow coastal shelf/ridges, darker = deep ocean trenches)
-    const depthVal = reliefTex.r.add(reliefTex.g).add(reliefTex.b).div(3.0);
+    // Depth factor from high-res GEBCO bathymetry map (gebco_08_rev_bath_5400x2700.png)
+    const depthVal = bathymetrySample.r.add(bathymetrySample.g).add(bathymetrySample.b).div(3.0);
     const depthFactor = depthVal.mul(bathymetryIntensityUniform).clamp(0.0, 1.0);
     
     // Depth Gradient Color (Deep water vs Shallow water color)

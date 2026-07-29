@@ -76,7 +76,7 @@ export const CONSTANTS = {
     NORMAL: use2k ? "./2k_earth_normal_map.png" : "./8k_earth_normal_map.png",
     BUMP: use2k ? "./2k_earth_bump_map.png" : "./8k_earth_bump_map.png",
     CLOUDS: use2k ? "./2k_earth_clouds.jpg" : "./8k_earth_clouds.jpg",
-    RELIEF: use2k ? "./2k_earth_relief_daymap.jpg" : "./8k_earth_relief_daymap.jpg",
+    BATHYMETRY: "./gebco_08_rev_bath_5400x2700.png",
     SST_ANOMALIES: "./GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies.png",
     MODIS_NDVI: "./MODIS_Terra_NDVI_8Day.png",
     STARS: use2k ? "./starmap_2k.jpg" : "./starmap_8k.jpg",
@@ -87,7 +87,7 @@ export const CONSTANTS = {
     SHOW: typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("settings") !== "false") : true,
     TONE_MAPPING: {
       MODE: 4, // 4 = ACESFilmicToneMapping
-      EXPOSURE: 1.0,
+      EXPOSURE: 0.85,
       HDR_PEAK_HIGHLIGHTS: false,
     },
     BLOOM: {
@@ -155,12 +155,12 @@ export const CONSTANTS = {
       COLOR: 0x334059,
     },
     OCEAN: {
-      ROUGHNESS: 0.4,
-      METALNESS: 0.05,
-      BATHYMETRY_INTENSITY: 1.0,
+      ROUGHNESS: 0.5,
+      METALNESS: 0.3,
+      BATHYMETRY_INTENSITY: 0.5,
       SHALLOW_COLOR: 0x1ab2ff,
       DEEP_COLOR: 0x0A267B,
-      WATER_CLARITY: 0.5,
+      WATER_CLARITY: 0.1,
       IOR: 1.333,
       FRESNEL_STRENGTH: 0,
       SSS_COLOR: 0x00f0ff,
