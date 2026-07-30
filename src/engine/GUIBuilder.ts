@@ -70,6 +70,14 @@ export interface GuiOptions {
   scene: THREE.Scene;
   directionalLight: THREE.DirectionalLight;
   sunMaterial: THREE.MeshBasicMaterial;
+  sunUserData?: {
+    useTexture?: any;
+    textureBlend?: any;
+    noiseStrength?: any;
+    glowIntensity?: any;
+    emissiveBoost?: any;
+    sunColor?: any;
+  };
   sunSettings: {
     autoRotate: boolean;
     speed: number;
@@ -155,7 +163,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   };
   sunFolder
     .add(sunSettings, "intensity", 0.0, 10.0)
-    .name("Intensity")
+    .name("Light Intensity")
     .onChange((v: number) => {
       directionalLight.intensity = v;
     });
@@ -164,9 +172,51 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     .name("Color")
     .onChange((c: number) => {
       directionalLight.color.setHex(c);
-      sunMaterial.color.setHex(c);
-      sunMaterial.color.multiplyScalar(2.0);
+      if (options.sunUserData && options.sunUserData.sunColor) {
+        options.sunUserData.sunColor.value.setHex(c);
+      } else if (sunMaterial && sunMaterial.color) {
+        sunMaterial.color.setHex(c);
+        sunMaterial.color.multiplyScalar(2.0);
+      }
     });
+
+  if (options.sunUserData) {
+    const su = options.sunUserData;
+    if (su.useTexture) {
+      const texState = { enabled: su.useTexture.value > 0.5 };
+      sunFolder
+        .add(texState, "enabled")
+        .name("Enable Texture")
+        .onChange((v: boolean) => {
+          su.useTexture.value = v ? 1.0 : 0.0;
+        });
+    }
+    if (su.textureBlend) {
+      sunFolder
+        .add(su.textureBlend, "value", 0.0, 1.0)
+        .step(0.01)
+        .name("Texture Blend");
+    }
+    if (su.noiseStrength) {
+      sunFolder
+        .add(su.noiseStrength, "value", 0.0, 1.0)
+        .step(0.01)
+        .name("Granulation Noise");
+    }
+    if (su.glowIntensity) {
+      sunFolder
+        .add(su.glowIntensity, "value", 0.0, 5.0)
+        .step(0.1)
+        .name("Coronal Glow");
+    }
+    if (su.emissiveBoost) {
+      sunFolder
+        .add(su.emissiveBoost, "value", 0.1, 10.0)
+        .step(0.1)
+        .name("Emissive Brightness");
+    }
+  }
+
   sunFolder.add(sunSettings, "autoRotate").name("Auto Rotate");
   sunFolder.add(sunSettings, "speed", 0.0, 5.0).name("Speed");
   sunFolder.add(sunSettings, "inclination", -1.0, 1.0).name("Inclination");

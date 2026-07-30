@@ -21,6 +21,7 @@ import Stats from "three/examples/jsm/libs/stats.module.js";
 import { CONSTANTS, CINEMATIC_LOCATIONS } from "../constants";
 import { createEarth } from "./Earth";
 import { createMoon, updateMoon } from "./Moon";
+import { createSun } from "./Sun";
 import {
   lensflareShader,
   ccShader,
@@ -49,6 +50,7 @@ export class Engine {
   private stats: any;
 
   private sunMesh: THREE.Mesh;
+  private sunUserData: any;
   private directionalLight: THREE.DirectionalLight;
   private moonMesh: THREE.Object3D;
   private moonSettings: {
@@ -247,11 +249,9 @@ export class Engine {
     this.directionalLight.position.set(10, 5, 10);
     this.scene.add(this.directionalLight);
 
-    const sunGeom = new THREE.SphereGeometry(6, 32, 32);
-    const sunMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(CONSTANTS.GUI.SUN.COLOR).multiplyScalar(2.0),
-    });
-    this.sunMesh = new THREE.Mesh(sunGeom, sunMat);
+    const { mesh: sunMeshObj, userData: sunUserDataObj } = await createSun(this.textureLoader);
+    this.sunMesh = sunMeshObj;
+    this.sunUserData = sunUserDataObj;
     this.sunMesh.position.copy(
       this.directionalLight.position.clone().normalize().multiplyScalar(200),
     );
@@ -592,6 +592,7 @@ export class Engine {
       scene: this.scene,
       directionalLight: this.directionalLight,
       sunMaterial: this.sunMesh.material as THREE.MeshBasicMaterial,
+      sunUserData: this.sunUserData,
       sunSettings: this.sunSettings,
       debugSettings,
       statsDom: this.stats.dom,
@@ -695,6 +696,7 @@ export class Engine {
       Math.sin(sa) * sunDist,
     );
     this.sunMesh.position.copy(this.directionalLight.position);
+    this.sunMesh.rotation.y += 0.001;
     this.sunDirUniform.value.copy(this.directionalLight.position).normalize();
 
     // Rotate Earth

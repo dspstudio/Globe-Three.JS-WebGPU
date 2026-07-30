@@ -3,11 +3,18 @@ import { LocationInfo } from "./types";
 // Check device capability
 export const isMobileOrTablet = () => {
   if (typeof window === "undefined") return false;
-  const isMobile =
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+  const isMobileUA =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(
       navigator.userAgent,
     );
-  return isMobile || window.innerWidth < 1024;
+  const isIPadOS =
+    navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  const isCoarsePointer =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: coarse)").matches;
+  const isSmallScreen = window.innerWidth < 1024 || window.innerHeight < 768;
+
+  return isMobileUA || isIPadOS || isSmallScreen || isCoarsePointer;
 };
 
 const getInitialResolutionScale = () => {
@@ -82,6 +89,7 @@ export const CONSTANTS = {
     STARS: use2k ? "./starmap_2k.jpg" : "./starmap_8k.jpg",
     MOON_ALBEDO: use2k ? "./2k_moon.jpg" : "./8k_moon.jpg",
     MOON_DISPLACEMENT: use2k ? "./ldem_4.png" : "./ldem_4.png",
+    SUN: "./8k_sun_texture.jpg",
   },
   GUI: {
     SHOW: typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("settings") !== "false") : true,
@@ -113,8 +121,8 @@ export const CONSTANTS = {
     LENS_FLARE: {
       ENABLED: true,
       INTENSITY: 0.15,
-      ENTER_DISTANCE: 0.0,
-      LEAVE_DISTANCE: 0.0,
+      ENTER_DISTANCE: -0.8,
+      LEAVE_DISTANCE: -1,
       FADE_DURATION: 0.0,
     },
     ANAMORPHIC: {
@@ -132,7 +140,7 @@ export const CONSTANTS = {
       OFFSET: 0.5,
     },
     CHROMATIC_ABERRATION: {
-      ENABLED: true,
+      ENABLED: false,
       STRENGTH: 0.25,
       SCALE: 0.5,
     },
@@ -209,6 +217,11 @@ export const CONSTANTS = {
       AUTO_ROTATE: true,
       SPEED: 0.05,
       INCLINATION: 0.3,
+      USE_TEXTURE: true,
+      TEXTURE_BLEND: 0.75,
+      NOISE_STRENGTH: 0.35,
+      GLOW_INTENSITY: 1.8,
+      EMISSIVE_BOOST: 2.0,
     },
     SATELLITES: {
       ENABLED: false,
