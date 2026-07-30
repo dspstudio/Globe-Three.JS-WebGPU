@@ -89,13 +89,13 @@ export const CONSTANTS = {
     STARS: use2k ? "./starmap_2k.jpg" : "./starmap_8k.jpg",
     MOON_ALBEDO: use2k ? "./2k_moon.jpg" : "./8k_moon.jpg",
     MOON_DISPLACEMENT: use2k ? "./ldem_4.png" : "./ldem_4.png",
-    SUN: "./8k_sun_texture.jpg",
+    SUN: "./sun_texture.jpg",
   },
   GUI: {
     SHOW: typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("settings") !== "false") : true,
     TONE_MAPPING: {
       MODE: 4, // 4 = ACESFilmicToneMapping
-      EXPOSURE: 0.9,
+      EXPOSURE: 1,
       HDR_PEAK_HIGHLIGHTS: false,
     },
     BLOOM: {
@@ -105,9 +105,9 @@ export const CONSTANTS = {
       THRESHOLD: 0.92,
     },
     COLOR_GRADING: {
-      CONTRAST: 1.05,
-      SATURATION: 1.2,
-      BLACK_LEVEL: 0.01,
+      CONTRAST: 1,
+      SATURATION: 1,
+      BLACK_LEVEL: 0,
       BLUE_GREEN_BOOST: 0.0,
     },
     MOON: {
@@ -218,10 +218,10 @@ export const CONSTANTS = {
       SPEED: 0.05,
       INCLINATION: 0.3,
       USE_TEXTURE: true,
-      TEXTURE_BLEND: 0.75,
+      TEXTURE_BLEND: 0,
       NOISE_STRENGTH: 0.35,
       GLOW_INTENSITY: 1.8,
-      EMISSIVE_BOOST: 2.0,
+      EMISSIVE_BOOST: 10,
     },
     SATELLITES: {
       ENABLED: false,
