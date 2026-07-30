@@ -142,7 +142,7 @@ export const CONSTANTS = {
     },
     ATMOSPHERE: {
       MODE: "Scattering",
-      DENSITY: 20.0,
+      DENSITY: 5.0,
       RAYLEIGH_INTENSITY: 1.0,
       RAYLEIGH_COLOR: 0x3377ff,
       MIE_COLOR: 0x0d374a,
@@ -165,7 +165,7 @@ export const CONSTANTS = {
       FRESNEL_STRENGTH: 0.1,
       SSS_COLOR: 0x00d0ff,
       SSS_INTENSITY: 0.25,
-      FOAM_THRESHOLD: 0.8,
+      FOAM_THRESHOLD: 0.95,
       FOAM_INTENSITY: 0.2,
       COASTAL_FADE_DISTANCE: 0.1,
     },

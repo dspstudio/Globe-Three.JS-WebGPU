@@ -245,8 +245,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // Apply custom ocean colors only to ocean areas (where specular mask spec > 0)
     const oceanSurfaceTex = mix(landDayTex, oceanColor, spec);
 
-    // Coastal Shelf Foam (subtle brightened shelf outline along shallow shorelines)
-    const foamMin = foamThresholdUniform.sub(coastalFadeDistanceUniform);
+    // Coastal Shelf Foam (originates at continent shoreline and fades outward into ocean)
+    const foamMin = foamThresholdUniform.sub(coastalFadeDistanceUniform).clamp(0.0, 1.0);
     const coastalFoamMask = smoothstep(foamMin, foamThresholdUniform, depthFactor).mul(spec);
     const finalSurfaceTex = mix(oceanSurfaceTex, vec3(0.95, 0.98, 1.0), coastalFoamMask.mul(foamIntensityUniform));
 
