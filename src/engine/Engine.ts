@@ -78,6 +78,13 @@ export class Engine {
   private anamorphicSizeUniform: any;
   private anamorphicThicknessUniform: any;
   private anamorphicColorUniform: any;
+
+  // Pre-allocated temporary vectors for zero allocation animation loop
+  private tempVec3 = new THREE.Vector3();
+  private tempDirToAnchor = new THREE.Vector3();
+  private tempTargetPos = new THREE.Vector3();
+  private tempEarthCenter = new THREE.Vector3(0, 0, 0);
+  private tempDirToCamera = new THREE.Vector3();
   private anamorphicSettings: {
     enabled: boolean;
     intensity: number;
@@ -660,18 +667,17 @@ export class Engine {
     if (this.focusTargetAnchorId) {
       const anchor = this.locationAnchors.get(this.focusTargetAnchorId);
       if (anchor) {
-        const tempV = new THREE.Vector3();
-        anchor.getWorldPosition(tempV);
-        const dirToAnchor = tempV.clone().normalize();
+        anchor.getWorldPosition(this.tempVec3);
+        this.tempDirToAnchor.copy(this.tempVec3).normalize();
         
         const currentDistance = this.camera.position.length();
         const targetDistance = Math.max(CONSTANTS.EARTH_RADIUS * 1.5, Math.min(currentDistance, CONSTANTS.EARTH_RADIUS * 2.5));
         
-        const targetPos = dirToAnchor.multiplyScalar(targetDistance);
-        this.camera.position.lerp(targetPos, 0.08);
+        this.tempTargetPos.copy(this.tempDirToAnchor).multiplyScalar(targetDistance);
+        this.camera.position.lerp(this.tempTargetPos, 0.08);
         
-        if (this.camera.position.distanceTo(targetPos) < 0.05) {
-          this.camera.position.copy(targetPos);
+        if (this.camera.position.distanceTo(this.tempTargetPos) < 0.05) {
+          this.camera.position.copy(this.tempTargetPos);
           this.focusTargetAnchorId = null;
         }
       }
@@ -716,6 +722,7 @@ export class Engine {
       this.earthGroup.userData.cloudRotationY.value += this.earthSettings.rotationSpeed * 0.2;
     }
 
+    // Occlusion & sub-layer visibility management for Earth inner cutaway layers
     if (this.earthGroup && this.earthGroup.userData.innerLayers && this.earthGroup.userData.cutawayProgress) {
       const p = this.earthGroup.userData.cutawayProgress.value;
       const inner = this.earthGroup.userData.innerLayers;
@@ -726,49 +733,61 @@ export class Engine {
       }
     }
 
-    if (this.moonSettings.enabled) {
-      this.moonSettings.angle += this.moonSettings.speed;
+    // Toggle layer visibility to bypass rendering when disabled
+    if (this.countryBorders && this.countryBorders.mesh) {
+      this.countryBorders.mesh.visible = this.countryBorders.settings.enabled;
     }
-    if (this.moonMesh && this.sunMesh) {
-      updateMoon(this.moonMesh, this.sunMesh, this.camera, this.moonSettings);
-      this.moonPosUniform.value.copy(this.moonMesh.position);
+    if (this.graticule && this.graticule.mesh) {
+      this.graticule.mesh.visible = this.graticule.settings.enabled;
+    }
+
+    if (this.moonMesh) {
+      this.moonMesh.visible = this.moonSettings.enabled;
+      if (this.moonSettings.enabled) {
+        this.moonSettings.angle += this.moonSettings.speed;
+        updateMoon(this.moonMesh, this.sunMesh, this.camera, this.moonSettings);
+        this.moonPosUniform.value.copy(this.moonMesh.position);
+      }
     }
 
     // Update Satellites Positions if enabled
-    if (this.satelliteSettings.enabled && this.satellitePoints && this.satelliteData) {
-      const count = this.satelliteSettings.count;
-      const posAttr = this.satellitePoints.geometry.attributes.position as THREE.BufferAttribute;
-      const positions = posAttr.array as Float32Array;
-      const { radii, inclinations, ascendingNodes, angularVelocities, phases } = this.satelliteData;
-      const speedScale = this.satelliteSettings.speedScale;
+    if (this.satellitePoints) {
+      this.satellitePoints.visible = this.satelliteSettings.enabled;
+      if (this.satelliteSettings.enabled && this.satelliteData) {
+        const count = this.satelliteSettings.count;
+        const posAttr = this.satellitePoints.geometry.attributes.position as THREE.BufferAttribute;
+        const positions = posAttr.array as Float32Array;
+        const { radii, inclinations, ascendingNodes, angularVelocities, phases } = this.satelliteData;
+        const speedScale = this.satelliteSettings.speedScale;
 
-      for (let i = 0; i < count; i++) {
-        phases[i] += angularVelocities[i] * speedScale;
-        if (phases[i] > Math.PI * 2) phases[i] -= Math.PI * 2;
+        for (let i = 0; i < count; i++) {
+          phases[i] += angularVelocities[i] * speedScale;
+          if (phases[i] > Math.PI * 2) phases[i] -= Math.PI * 2;
 
-        const r = radii[i];
-        const theta = phases[i];
-        const inc = inclinations[i];
-        const node = ascendingNodes[i];
+          const r = radii[i];
+          const theta = phases[i];
+          const inc = inclinations[i];
+          const node = ascendingNodes[i];
 
-        const x0 = r * Math.cos(theta);
-        const z0 = r * Math.sin(theta);
+          const x0 = r * Math.cos(theta);
+          const z0 = r * Math.sin(theta);
 
-        const x1 = x0 * Math.cos(inc);
-        const y1 = x0 * Math.sin(inc);
-        const z1 = z0;
+          const x1 = x0 * Math.cos(inc);
+          const y1 = x0 * Math.sin(inc);
+          const z1 = z0;
 
-        const x2 = x1 * Math.cos(node) + z1 * Math.sin(node);
-        const y2 = y1;
-        const z2 = -x1 * Math.sin(node) + z1 * Math.cos(node);
+          const x2 = x1 * Math.cos(node) + z1 * Math.sin(node);
+          const y2 = y1;
+          const z2 = -x1 * Math.sin(node) + z1 * Math.cos(node);
 
-        const i3 = i * 3;
-        positions[i3] = x2;
-        positions[i3 + 1] = y2;
-        positions[i3 + 2] = z2;
+          const i3 = i * 3;
+          positions[i3] = x2;
+          positions[i3 + 1] = y2;
+          positions[i3 + 2] = z2;
+        }
+
+        posAttr.needsUpdate = true;
       }
-
-      posAttr.needsUpdate = true;
     }
 
     this.anamorphicSizeUniform.value = this.anamorphicSettings.size;
@@ -1046,23 +1065,21 @@ export class Engine {
     }
 
     const projected: ProjectedLocation[] = [];
-    const tempV = new THREE.Vector3();
-    const earthCenter = new THREE.Vector3(0, 0, 0);
 
     const width = this.canvas.parentElement ? this.canvas.parentElement.clientWidth : window.innerWidth;
     const height = this.canvas.parentElement ? this.canvas.parentElement.clientHeight : window.innerHeight;
 
-    const dirToCamera = this.camera.position.clone().sub(earthCenter).normalize();
+    this.tempDirToCamera.copy(this.camera.position).sub(this.tempEarthCenter).normalize();
 
     for (const [id, anchor] of this.locationAnchors.entries()) {
-      anchor.getWorldPosition(tempV);
+      anchor.getWorldPosition(this.tempVec3);
 
       // Distance check is useful to make sure they scale nicely
-      const distanceToCamera = this.camera.position.distanceTo(tempV);
+      const distanceToCamera = this.camera.position.distanceTo(this.tempVec3);
 
       // Check horizon visibility based on dot product of anchor direction and camera direction
-      const dirToAnchor = tempV.clone().sub(earthCenter).normalize();
-      const dot = dirToAnchor.dot(dirToCamera);
+      this.tempDirToAnchor.copy(this.tempVec3).sub(this.tempEarthCenter).normalize();
+      const dot = this.tempDirToAnchor.dot(this.tempDirToCamera);
 
       // Dot product > 0.0 means front-facing. We transition opacity down as it reaches the limb.
       const visible = dot > -0.05;
@@ -1072,11 +1089,11 @@ export class Engine {
       }
 
       // Project 3D vector to 2D NDC
-      tempV.project(this.camera);
+      this.tempVec3.project(this.camera);
 
       // Convert NDC to screen pixels
-      const x = (tempV.x * 0.5 + 0.5) * width;
-      const y = (tempV.y * -0.5 + 0.5) * height;
+      const x = (this.tempVec3.x * 0.5 + 0.5) * width;
+      const y = (this.tempVec3.y * -0.5 + 0.5) * height;
 
       // Find original location info
       const info = CINEMATIC_LOCATIONS.find((l) => l.id === id);

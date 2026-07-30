@@ -118,7 +118,10 @@ export class BackgroundStars {
     material.colorNode = vec4(starColor.mul(brightness), spriteGlow());
     material.scaleNode = scale;
 
-    return new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), material, 20000);
+    const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), material, 20000);
+    mesh.matrixAutoUpdate = false;
+    mesh.updateMatrix();
+    return mesh;
   }
 
   /** Update from canvas height + camera FOV (call on resize). */

@@ -216,6 +216,19 @@ let lastIsEntering = true;
 let currentOcclusion = 1.0;
 let lastOcclusionTime = performance.now();
 
+// Pre-allocated temporary vectors to ensure zero GC allocations per frame
+const _sunDir = new THREE.Vector3();
+const _centerToRay = new THREE.Vector3();
+const _closestPoint = new THREE.Vector3();
+const _flarePoint = new THREE.Vector3();
+const _camUp = new THREE.Vector3();
+const _camRight = new THREE.Vector3();
+const _moonCenterToRay = new THREE.Vector3();
+const _moonClosestPoint = new THREE.Vector3();
+const _vMoon = new THREE.Vector3();
+const _unitY = new THREE.Vector3(0, 1, 0);
+const _unitX = new THREE.Vector3(1, 0, 0);
+
 export function updateLensFlare(
   sunMesh: THREE.Mesh,
   camera: THREE.PerspectiveCamera,
@@ -248,20 +261,18 @@ export function updateLensFlare(
     return;
 
   const sunDist = sunMesh.position.distanceTo(camera.position);
-  const sunDir = sunMesh.position.clone().sub(camera.position).normalize();
-  const centerToRay = camera.position.clone().negate();
-  const projectionLength = centerToRay.dot(sunDir);
+  _sunDir.copy(sunMesh.position).sub(camera.position).normalize();
+  _centerToRay.copy(camera.position).negate();
+  const projectionLength = _centerToRay.dot(_sunDir);
 
   let occlusion = 1.0;
   let anamorphicOcclusionFactor = 0.0;
-  let flarePoint = sunMesh.position.clone();
+  _flarePoint.copy(sunMesh.position);
 
   // If projectionLength > 0, the earth is in front of the camera towards the sun
   if (projectionLength > 0 && projectionLength < sunDist) {
-    const closestPoint = camera.position
-      .clone()
-      .add(sunDir.clone().multiplyScalar(projectionLength));
-    const distToCenter = closestPoint.length();
+    _closestPoint.copy(camera.position).addScaledVector(_sunDir, projectionLength);
+    const distToCenter = _closestPoint.length();
 
     // Track direction of movement relative to Earth center (entering vs leaving)
     let isEntering = lastIsEntering;
@@ -292,16 +303,16 @@ export function updateLensFlare(
 
     // If sun is behind Earth's disk, clamp the flare origin to Earth's outer limb
     if (distToCenter < baseRadius && distToCenter > 0.0001) {
-      flarePoint = closestPoint.clone().normalize().multiplyScalar(baseRadius);
+      _flarePoint.copy(_closestPoint).normalize().multiplyScalar(baseRadius);
     }
 
     // Anamorphic appears when sun is grazing the edge (diamond ring effect)
     // Calculate the horizontal distance to the earth's edge at this altitude
-    const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-    const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    _camUp.copy(_unitY).applyQuaternion(camera.quaternion);
+    _camRight.copy(_unitX).applyQuaternion(camera.quaternion);
 
-    const sunY = Math.abs(closestPoint.dot(camUp));
-    const sunX = Math.abs(closestPoint.dot(camRight));
+    const sunY = Math.abs(_closestPoint.dot(_camUp));
+    const sunX = Math.abs(_closestPoint.dot(_camRight));
 
     if (sunY >= radius) {
       anamorphicOcclusionFactor = 0.0;
@@ -340,18 +351,12 @@ export function updateLensFlare(
 
   // Moon occlusion
   if (moonMesh && moonSettings && moonSettings.enabled) {
-    const moonCenterToRay = camera.position
-      .clone()
-      .sub(moonMesh.position)
-      .negate();
-    const moonProjectionLength = moonCenterToRay.dot(sunDir);
-    const moonDist = moonMesh.position.distanceTo(camera.position);
+    _moonCenterToRay.copy(camera.position).sub(moonMesh.position).negate();
+    const moonProjectionLength = _moonCenterToRay.dot(_sunDir);
 
     if (moonProjectionLength > 0 && moonProjectionLength < sunDist) {
-      const moonClosestPoint = camera.position
-        .clone()
-        .add(sunDir.clone().multiplyScalar(moonProjectionLength));
-      const distToMoonCenter = moonClosestPoint.distanceTo(moonMesh.position);
+      _moonClosestPoint.copy(camera.position).addScaledVector(_sunDir, moonProjectionLength);
+      const distToMoonCenter = _moonClosestPoint.distanceTo(moonMesh.position);
       const moonRadius = 2.73; // Visual radius of the sphere
 
       if (distToMoonCenter < moonRadius) {
@@ -364,12 +369,12 @@ export function updateLensFlare(
       }
 
       // Peak at moon edge
-      const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-      const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+      _camUp.copy(_unitY).applyQuaternion(camera.quaternion);
+      _camRight.copy(_unitX).applyQuaternion(camera.quaternion);
       
-      const vMoon = moonClosestPoint.clone().sub(moonMesh.position);
-      const moonSunY = Math.abs(vMoon.dot(camUp));
-      const moonSunX = Math.abs(vMoon.dot(camRight));
+      _vMoon.copy(_moonClosestPoint).sub(moonMesh.position);
+      const moonSunY = Math.abs(_vMoon.dot(_camUp));
+      const moonSunX = Math.abs(_vMoon.dot(_camRight));
 
       if (moonSunY < moonRadius) {
         const moonEdgeX = Math.sqrt(Math.max(0, moonRadius * moonRadius - moonSunY * moonSunY));
@@ -407,7 +412,7 @@ export function updateLensFlare(
     }
   }
 
-  const p = flarePoint.project(camera);
+  const p = _flarePoint.project(camera);
 
   if (p.z > 1.0) {
     flarePosUniform.value.set(-999, -999);

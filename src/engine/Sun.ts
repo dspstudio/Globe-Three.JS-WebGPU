@@ -58,12 +58,6 @@ const fbmSun = Fn(([p]: [any]) => {
   a.assign(a.mul(0.5));
 
   v.addAssign(a.mul(noiseSun(curP)));
-  curP.assign(curP.mul(2.02));
-  a.assign(a.mul(0.5));
-
-  v.addAssign(a.mul(noiseSun(curP)));
-  curP.assign(curP.mul(2.02));
-  a.assign(a.mul(0.5));
 
   return v;
 });
@@ -82,8 +76,9 @@ export async function createSun(textureLoader: THREE.TextureLoader): Promise<{
 }> {
   const sunTextureMap = await textureLoader.loadAsync(CONSTANTS.TEXTURES.SUN);
   sunTextureMap.colorSpace = THREE.SRGBColorSpace;
+  sunTextureMap.minFilter = THREE.LinearMipmapLinearFilter;
 
-  const sunGeometry = new THREE.SphereGeometry(6, 64, 64);
+  const sunGeometry = new THREE.SphereGeometry(6, 32, 32);
 
   // Uniforms
   const useTexture = uniform(CONSTANTS.GUI.SUN.USE_TEXTURE !== false ? 1.0 : 0.0);
