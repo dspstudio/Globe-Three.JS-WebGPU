@@ -42,16 +42,6 @@ const fbmIC = Fn(([p]: [any]) => {
     a.assign(a.mul(0.5));
 
     v.addAssign(a.mul(noiseIC(curP)));
-    curP.assign(curP.mul(2.02));
-    a.assign(a.mul(0.5));
-
-    v.addAssign(a.mul(noiseIC(curP)));
-    curP.assign(curP.mul(2.02));
-    a.assign(a.mul(0.5));
-
-    v.addAssign(a.mul(noiseIC(curP)));
-    curP.assign(curP.mul(2.02));
-    a.assign(a.mul(0.5));
 
     return v;
 });
@@ -62,10 +52,9 @@ const calculateMoltenCore = Fn(([pos, uTime]: [any, any]) => {
     const flow = uTime.mul(0.05);
 
     const n1 = fbmIC(p.add(vec3(flow, flow.negate(), flow.mul(0.5))));
-    const n2 = fbmIC(p.mul(2.3).sub(vec3(0.0, flow.mul(1.5), 0.0)).add(n1));
-    const turbulence = fbmIC(p.mul(1.5).add(n2.mul(2.0)).sub(flow));
+    const turbulence = fbmIC(p.mul(1.5).add(n1.mul(1.5)).sub(flow));
 
-    const heat = clamp(turbulence.mul(1.3).add(n1.mul(0.4)), float(0.0), float(1.0));
+    const heat = clamp(turbulence.mul(1.2).add(n1.mul(0.4)), float(0.0), float(1.0));
 
     const coldMetal = vec3(0.08, 0.03, 0.02);
     const deepRed   = vec3(0.55, 0.05, 0.0);
@@ -76,7 +65,7 @@ const calculateMoltenCore = Fn(([pos, uTime]: [any, any]) => {
     const c2 = mix(c1, orange, smoothstep(float(0.45), float(0.75), heat));
     const heatColor = mix(c2, whiteHot, smoothstep(float(0.78), float(0.95), heat)).toVar();
 
-    const veins = smoothstep(float(0.6), float(0.9), fbmIC(p.mul(6.0).add(n2.mul(3.0))));
+    const veins = smoothstep(float(0.65), float(0.9), fbmIC(p.mul(4.0).add(n1.mul(2.0))));
     heatColor.addAssign(veins.mul(vec3(1.0, 0.5, 0.15)).mul(0.6));
 
     return heatColor;
@@ -92,12 +81,6 @@ const fbmLM = Fn(([p]: [any]) => {
     a.assign(a.mul(0.5));
 
     v.addAssign(a.mul(noiseIC(curP)));
-    curP.assign(curP.mul(2.03));
-    a.assign(a.mul(0.5));
-
-    v.addAssign(a.mul(noiseIC(curP)));
-    curP.assign(curP.mul(2.03));
-    a.assign(a.mul(0.5));
 
     return v;
 });
@@ -109,12 +92,7 @@ const rockFbm = Fn(([p, uTime]: [any, any]) => {
         fbmLM(p.add(vec3(4.1, 2.2, 1.7)).add(t.mul(0.03))),
         fbmLM(p.add(vec3(2.3, 6.6, 3.4)).sub(t.mul(0.025)))
     );
-    const warp2 = vec3(
-        fbmLM(p.add(warp1.mul(2.0)).add(vec3(1.1, 3.3, 2.2)).add(t.mul(0.02))),
-        fbmLM(p.add(warp1.mul(2.0)).add(vec3(5.0, 1.4, 0.9)).sub(t.mul(0.015))),
-        fbmLM(p.add(warp1.mul(2.0)).add(vec3(3.1, 0.6, 5.4)).add(t.mul(0.022)))
-    );
-    return fbmLM(p.add(warp2.mul(2.0)));
+    return fbmLM(p.add(warp1.mul(1.5)));
 });
 
 const calculateLowerMantle = Fn(([pos, uTime]: [any, any]) => {

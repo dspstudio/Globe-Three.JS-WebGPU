@@ -411,11 +411,6 @@ export class Engine {
       this.anamorphicIntensityUniform as any,
     );
 
-    const preColorGrade = scenePass
-      .add(bloomPass)
-      .add(colorFlare as any)
-      .add(colorAnamorphic as any);
-
     const cgSettings = {
       contrast: CONSTANTS.GUI.COLOR_GRADING.CONTRAST,
       saturation: CONSTANTS.GUI.COLOR_GRADING.SATURATION,
@@ -426,14 +421,6 @@ export class Engine {
     const cgSaturationUniform = uniform(cgSettings.saturation);
     const cgBlackLevelUniform = uniform(cgSettings.blackLevel);
     const cgBlueGreenBoostUniform = uniform(cgSettings.blueGreenBoost);
-
-    const hdrColorGraded = colorGradeShader({
-      color: preColorGrade,
-      contrast: cgContrastUniform,
-      saturation: cgSaturationUniform,
-      blackLevel: cgBlackLevelUniform,
-      blueGreenBoost: cgBlueGreenBoostUniform,
-    } as any);
 
     this.caSettings = {
       enabled: CONSTANTS.GUI.CHROMATIC_ABERRATION.ENABLED,
@@ -474,28 +461,45 @@ export class Engine {
     const tmExposureUniform = uniform(tmSettings.exposure);
 
     const rebuildPipeline = () => {
-      let finalNode: any;
+      // Single consolidated TSL pass starting from scene + bloom + lens flares
+      const sceneWithFlares = scenePass
+        .add(bloomPass)
+        .add(colorFlare as any)
+        .add(colorAnamorphic as any);
+
+      const graded = colorGradeShader({
+        color: sceneWithFlares,
+        contrast: cgContrastUniform,
+        saturation: cgSaturationUniform,
+        blackLevel: cgBlackLevelUniform,
+        blueGreenBoost: cgBlueGreenBoostUniform,
+      } as any);
+
+      let toneMapped: any;
       const modeNum = Number(tmSettings.mode);
       if (modeNum === THREE.NoToneMapping) {
-        finalNode = hdrColorGraded;
+        toneMapped = graded;
       } else {
-        finalNode = hdrColorGraded.toneMapping(modeNum as THREE.ToneMapping, tmExposureUniform);
+        toneMapped = graded.toneMapping(modeNum as THREE.ToneMapping, tmExposureUniform);
       }
-      finalNode = vignetteShader({
-        color: finalNode,
+
+      const vignetted = vignetteShader({
+        color: toneMapped,
         uv: screenCoordinate.div(screenSize),
         darkness: vignetteDarknessUniform,
         offset: vignetteOffsetUniform,
       } as any);
-      finalNode = chromaticAberration(
-        finalNode,
+
+      const ca = chromaticAberration(
+        vignetted,
         caStrengthUniform,
         vec2(0.5, 0.5),
         caScaleUniform,
       );
-      finalNode = film(finalNode, filmIntensityUniform);
+
+      const filmed = film(ca, filmIntensityUniform);
       
-      this.renderPipeline.outputNode = smaa(finalNode);
+      this.renderPipeline.outputNode = smaa(filmed);
       this.renderPipeline.needsUpdate = true;
       if (!this.isDisposed && this.renderer) {
         this.renderer.compileAsync(this.scene, this.camera);
