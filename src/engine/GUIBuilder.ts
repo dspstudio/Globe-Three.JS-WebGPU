@@ -217,20 +217,36 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       .step(0.01)
       .name("Index of Refraction (IOR)");
   }
+  const oceanColors = {
+    shallow: earth.userData.oceanShallowColor ? earth.userData.oceanShallowColor.value.getHex() : CONSTANTS.GUI.OCEAN.SHALLOW_COLOR,
+    deep: earth.userData.oceanDeepColor ? earth.userData.oceanDeepColor.value.getHex() : CONSTANTS.GUI.OCEAN.DEEP_COLOR,
+    fresnel: earth.userData.fresnelColor ? earth.userData.fresnelColor.value.getHex() : CONSTANTS.GUI.OCEAN.FRESNEL_COLOR,
+    sss: earth.userData.sssColor ? earth.userData.sssColor.value.getHex() : CONSTANTS.GUI.OCEAN.SSS_COLOR,
+  };
+
   if (earth.userData.fresnelStrength) {
     opticsFolder
       .add(earth.userData.fresnelStrength, "value", 0.0, 3.0)
       .step(0.05)
       .name("Fresnel Strength");
   }
+  if (earth.userData.fresnelExponent) {
+    opticsFolder
+      .add(earth.userData.fresnelExponent, "value", 1.0, 10.0)
+      .step(0.2)
+      .name("Fresnel Falloff Exponent");
+  }
+  if (earth.userData.fresnelColor) {
+    opticsFolder
+      .addColor(oceanColors, "fresnel")
+      .name("Fresnel Glint Color")
+      .onChange((c: any) => {
+        earth.userData.fresnelColor.value.set(c);
+      });
+  }
 
   // Subfolder 2: Color & Bathymetry
   const colorFolder = oceanFolder.addFolder("Color & Bathymetry");
-  const oceanColors = {
-    shallow: earth.userData.oceanShallowColor ? earth.userData.oceanShallowColor.value.getHex() : CONSTANTS.GUI.OCEAN.SHALLOW_COLOR,
-    deep: earth.userData.oceanDeepColor ? earth.userData.oceanDeepColor.value.getHex() : CONSTANTS.GUI.OCEAN.DEEP_COLOR,
-    sss: earth.userData.sssColor ? earth.userData.sssColor.value.getHex() : CONSTANTS.GUI.OCEAN.SSS_COLOR,
-  };
 
   if (earth.userData.oceanShallowColor) {
     colorFolder
@@ -1095,6 +1111,8 @@ export function buildGui(gui: GUI, options: GuiOptions) {
           WATER_CLARITY: earth.userData.waterClarity ? earth.userData.waterClarity.value : CONSTANTS.GUI.OCEAN.WATER_CLARITY,
           IOR: earth.userData.waterIor ? earth.userData.waterIor.value : CONSTANTS.GUI.OCEAN.IOR,
           FRESNEL_STRENGTH: earth.userData.fresnelStrength ? earth.userData.fresnelStrength.value : CONSTANTS.GUI.OCEAN.FRESNEL_STRENGTH,
+          FRESNEL_COLOR: earth.userData.fresnelColor ? earth.userData.fresnelColor.value.getHex() : CONSTANTS.GUI.OCEAN.FRESNEL_COLOR,
+          FRESNEL_EXPONENT: earth.userData.fresnelExponent ? earth.userData.fresnelExponent.value : CONSTANTS.GUI.OCEAN.FRESNEL_EXPONENT,
           SSS_COLOR: earth.userData.sssColor ? earth.userData.sssColor.value.getHex() : CONSTANTS.GUI.OCEAN.SSS_COLOR,
           SSS_INTENSITY: earth.userData.sssIntensity ? earth.userData.sssIntensity.value : CONSTANTS.GUI.OCEAN.SSS_INTENSITY,
           FOAM_THRESHOLD: earth.userData.foamThreshold ? earth.userData.foamThreshold.value : CONSTANTS.GUI.OCEAN.FOAM_THRESHOLD,

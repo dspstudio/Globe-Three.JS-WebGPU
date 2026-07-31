@@ -142,6 +142,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const waterClarityUniform = uniform(CONSTANTS.GUI.OCEAN.WATER_CLARITY);
     const waterIorUniform = uniform(CONSTANTS.GUI.OCEAN.IOR);
     const fresnelStrengthUniform = uniform(CONSTANTS.GUI.OCEAN.FRESNEL_STRENGTH);
+    const fresnelColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.OCEAN.FRESNEL_COLOR || 0x408ce6));
+    const fresnelExponentUniform = uniform(CONSTANTS.GUI.OCEAN.FRESNEL_EXPONENT || 4.0);
     const sssColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.OCEAN.SSS_COLOR));
     const sssIntensityUniform = uniform(CONSTANTS.GUI.OCEAN.SSS_INTENSITY);
     const foamThresholdUniform = uniform(CONSTANTS.GUI.OCEAN.FOAM_THRESHOLD);
@@ -161,6 +163,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     group.userData.waterClarity = waterClarityUniform;
     group.userData.waterIor = waterIorUniform;
     group.userData.fresnelStrength = fresnelStrengthUniform;
+    group.userData.fresnelColor = fresnelColorUniform;
+    group.userData.fresnelExponent = fresnelExponentUniform;
     group.userData.sssColor = sssColorUniform;
     group.userData.sssIntensity = sssIntensityUniform;
     group.userData.foamThreshold = foamThresholdUniform;
@@ -337,8 +341,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // Fresnel reflection & View direction calculations
     const viewDirWorld = normalize(cameraPosition.sub(positionWorld));
     const cosViewWave = max(float(0.0), dot(oceanNormWorld, viewDirWorld));
-    const fresnelVal = pow(float(1.0).sub(cosViewWave), float(4.0)).mul(fresnelStrengthUniform).mul(spec);
-    const fresnelGlow = vec3(0.25, 0.55, 0.85).mul(fresnelVal);
+    const fresnelVal = pow(float(1.0).sub(cosViewWave), fresnelExponentUniform).mul(fresnelStrengthUniform).mul(spec);
+    const fresnelGlow = fresnelColorUniform.mul(fresnelVal);
 
     // Subsurface Scattering (sunlight scattering through ocean depth)
     const sunLight = max(float(0.0), dot(oceanNormWorld, sunDir));
