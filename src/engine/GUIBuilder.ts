@@ -606,6 +606,44 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     .name("Manual Angle")
     .listen();
 
+  const lensFlaresGroup = sunFolder.addFolder("Lens Flares");
+  const flareFolder = lensFlaresGroup.addFolder("Solar Lens Flare");
+  flareFolder.add(flareSettings, "enabled").name("Enabled");
+  flareFolder.add(flareSettings, "intensity", 0.0, 1.0).name("Intensity");
+  flareFolder
+    .add(flareSettings, "enterDistance", -5.0, 5.0)
+    .step(0.01)
+    .name("Enter Distance");
+  flareFolder
+    .add(flareSettings, "leaveDistance", -5.0, 5.0)
+    .step(0.01)
+    .name("Leave Distance");
+  flareFolder
+    .add(flareSettings, "fadeDuration", 0.0, 3.0)
+    .step(0.05)
+    .name("Fade Duration (s)");
+
+  const anaFolder = lensFlaresGroup.addFolder("Anamorphic Eclipse Flare");
+  anaFolder.add(anamorphicSettings, "enabled").name("Enabled");
+  anaFolder.add(anamorphicSettings, "intensity", 0.0, 2.0).name("Intensity");
+  anaFolder.add(anamorphicSettings, "thickness", 0.1, 2.0).name("Thickness");
+  anaFolder.add(anamorphicSettings, "size", 0.1, 5.0).name("Size");
+  anaFolder
+    .add(anamorphicSettings, "innerFade", 0.001, 1.0)
+    .name("Inner Fade")
+    .step(0.001);
+  anaFolder
+    .add(anamorphicSettings, "outerFade", 0.01, 1.0)
+    .name("Outer Fade")
+    .step(0.01);
+  const aColor = { hex: anamorphicSettings.color };
+  anaFolder
+    .addColor(aColor, "hex")
+    .name("Color")
+    .onChange((c: number) => {
+      anamorphicSettings.color = c;
+    });
+
   const moonFolder = envGroup.addFolder("Moon");
   moonFolder
     .add(moonSettings, "enabled")
@@ -791,44 +829,6 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     });
   bloomFolder.add(bloomPass.radius, "value", 0, 1).name("Radius");
   bloomFolder.add(bloomPass.threshold, "value", 0, 1).name("Threshold");
-
-  const lensFlaresGroup = postGroup.addFolder("Lens Flares & Optical");
-  const flareFolder = lensFlaresGroup.addFolder("Solar Lens Flare");
-  flareFolder.add(flareSettings, "enabled").name("Enabled");
-  flareFolder.add(flareSettings, "intensity", 0.0, 1.0).name("Intensity");
-  flareFolder
-    .add(flareSettings, "enterDistance", -5.0, 5.0)
-    .step(0.01)
-    .name("Enter Distance");
-  flareFolder
-    .add(flareSettings, "leaveDistance", -5.0, 5.0)
-    .step(0.01)
-    .name("Leave Distance");
-  flareFolder
-    .add(flareSettings, "fadeDuration", 0.0, 3.0)
-    .step(0.05)
-    .name("Fade Duration (s)");
-
-  const anaFolder = lensFlaresGroup.addFolder("Anamorphic Eclipse Flare");
-  anaFolder.add(anamorphicSettings, "enabled").name("Enabled");
-  anaFolder.add(anamorphicSettings, "intensity", 0.0, 2.0).name("Intensity");
-  anaFolder.add(anamorphicSettings, "thickness", 0.1, 2.0).name("Thickness");
-  anaFolder.add(anamorphicSettings, "size", 0.1, 5.0).name("Size");
-  anaFolder
-    .add(anamorphicSettings, "innerFade", 0.001, 1.0)
-    .name("Inner Fade")
-    .step(0.001);
-  anaFolder
-    .add(anamorphicSettings, "outerFade", 0.01, 1.0)
-    .name("Outer Fade")
-    .step(0.01);
-  const aColor = { hex: anamorphicSettings.color };
-  anaFolder
-    .addColor(aColor, "hex")
-    .name("Color")
-    .onChange((c: number) => {
-      anamorphicSettings.color = c;
-    });
 
   const lensFxGroup = postGroup.addFolder("Camera Lens FX");
   const caFolder = lensFxGroup.addFolder("Chromatic Aberration");

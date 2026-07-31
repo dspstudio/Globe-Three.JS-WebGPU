@@ -106,8 +106,8 @@ export const CONSTANTS = {
     },
     COLOR_GRADING: {
       CONTRAST: 1,
-      SATURATION: 1,
-      BLACK_LEVEL: 0,
+      SATURATION: 1.25,
+      BLACK_LEVEL: 0.015,
       BLUE_GREEN_BOOST: 0.0,
     },
     MOON: {
@@ -165,7 +165,7 @@ export const CONSTANTS = {
     OCEAN: {
       ROUGHNESS: 0.4,
       METALNESS: 0.2,
-      BATHYMETRY_INTENSITY: 0.6,
+      BATHYMETRY_INTENSITY: 0.4,
       SHALLOW_COLOR: 0x0f8be3,
       DEEP_COLOR: 0x02164f,
       WATER_CLARITY: 0.7,
