@@ -1,8 +1,40 @@
 import * as THREE from 'three';
-import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, atan, sub, float, min, bumpMap, Discard, select, Fn, clamp, cos, sin, time } from 'three/tsl';
+import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, atan, sub, float, min, bumpMap, Discard, select, Fn, clamp, cos, sin, time, fract, floor, abs } from 'three/tsl';
 import { MeshStandardNodeMaterial, MeshBasicNodeMaterial, MeshPhysicalNodeMaterial } from 'three/webgpu';
 import { CONSTANTS } from '../constants';
 import { createInnerLayers } from './InnerLayers';
+
+// TSL Noise & FBM helpers for procedural ocean wave simulation
+const hash2D = Fn(([p]: [any]) => {
+    const pVec = vec2(p);
+    const p1 = fract(pVec.mul(vec2(123.34, 456.21)));
+    const d = dot(p1, p1.add(vec2(45.32)));
+    const p2 = p1.add(vec2(d));
+    return fract(p2.x.mul(p2.y));
+});
+
+const noise2D = Fn(([p]: [any]) => {
+    const pVec = vec2(p);
+    const i = floor(pVec);
+    const f = fract(pVec);
+    const a = hash2D(i);
+    const b = hash2D(i.add(vec2(1.0, 0.0)));
+    const c = hash2D(i.add(vec2(0.0, 1.0)));
+    const d = hash2D(i.add(vec2(1.0, 1.0)));
+    const u = f.mul(f).mul(float(3.0).sub(f.mul(2.0)));
+    const mixAB = mix(a, b, u.x);
+    const mixCD = mix(c, d, u.x);
+    return mix(mixAB, mixCD, u.y);
+});
+
+const fbm2D = Fn(([p]: [any]) => {
+    const pVec = vec2(p);
+    const n1 = noise2D(pVec).mul(0.5);
+    const n2 = noise2D(pVec.mul(2.02)).mul(0.25);
+    const n3 = noise2D(pVec.mul(4.08)).mul(0.125);
+    const n4 = noise2D(pVec.mul(8.24)).mul(0.0625);
+    return n1.add(n2).add(n3).add(n4);
+});
 
 export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: any, moonPosUniform: any, maxAnisotropy: number = 1): Promise<THREE.Group> {
     const group = new THREE.Group();
@@ -115,6 +147,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const foamThresholdUniform = uniform(CONSTANTS.GUI.OCEAN.FOAM_THRESHOLD);
     const foamIntensityUniform = uniform(CONSTANTS.GUI.OCEAN.FOAM_INTENSITY);
     const coastalFadeDistanceUniform = uniform(CONSTANTS.GUI.OCEAN.COASTAL_FADE_DISTANCE);
+    const waveHeightUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_HEIGHT || 0.05);
+    const waveScaleUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_SCALE || 18.0);
+    const waveSpeedUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_SPEED || 0.8);
+    const waveSparkleUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_SPARKLE || 0.4);
 
     group.userData.waterRoughness = waterRoughnessUniform;
     group.userData.waterMetalness = waterMetalnessUniform;
@@ -129,6 +165,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     group.userData.foamThreshold = foamThresholdUniform;
     group.userData.foamIntensity = foamIntensityUniform;
     group.userData.coastalFadeDistance = coastalFadeDistanceUniform;
+    group.userData.waveHeight = waveHeightUniform;
+    group.userData.waveScale = waveScaleUniform;
+    group.userData.waveSpeed = waveSpeedUniform;
+    group.userData.waveSparkle = waveSparkleUniform;
     
     // Calculate shadow dimmer mask
     const cloudShadow = mix(vec3(1.0), shadowColorUniform, shadowOpacity.mul(shadowIntensityUniform));
@@ -245,22 +285,81 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // Apply custom ocean colors only to ocean areas (where specular mask spec > 0)
     const oceanSurfaceTex = mix(landDayTex, oceanColor, spec);
 
-    // Coastal Shelf Foam (originates at continent shoreline and fades outward into ocean)
-    const foamMin = foamThresholdUniform.sub(coastalFadeDistanceUniform).clamp(0.0, 1.0);
-    const coastalFoamMask = smoothstep(foamMin, foamThresholdUniform, depthFactor).mul(spec);
-    const finalSurfaceTex = mix(oceanSurfaceTex, vec3(0.95, 0.98, 1.0), coastalFoamMask.mul(foamIntensityUniform));
+    // --- Procedural Animated Wave Heights & Normal Perturbation ---
+    // Triplanar FBM sampling avoids polar UV singularities
+    const waveTime = time.mul(waveSpeedUniform);
+
+    const getWaveHeightAt = Fn(([pPos]: [any]) => {
+        const pNorm = normalize(vec3(pPos));
+        const absN = abs(pNorm);
+        const w = absN.div(absN.x.add(absN.y).add(absN.z).add(0.0001));
+
+        const driftA = vec2(waveTime.mul(0.05), waveTime.mul(0.03));
+        const driftB = vec2(waveTime.mul(-0.08), waveTime.mul(0.02));
+
+        const uvX = vec2(pNorm.y, pNorm.z).mul(waveScaleUniform);
+        const uvY = vec2(pNorm.x, pNorm.z).mul(waveScaleUniform);
+        const uvZ = vec2(pNorm.x, pNorm.y).mul(waveScaleUniform);
+
+        const wx = fbm2D(uvX.add(driftA)).mul(0.6).add(fbm2D(uvX.mul(2.02).add(driftB)).mul(0.4));
+        const wy = fbm2D(uvY.add(driftA)).mul(0.6).add(fbm2D(uvY.mul(2.02).add(driftB)).mul(0.4));
+        const wz = fbm2D(uvZ.add(driftA)).mul(0.6).add(fbm2D(uvZ.mul(2.02).add(driftB)).mul(0.4));
+
+        return wx.mul(w.x).add(wy.mul(w.y)).add(wz.mul(w.z));
+    });
+
+    const hWave0 = getWaveHeightAt(positionLocal);
+
+    // Wave gradient finite differences
+    const waveEps = float(0.015);
+    const pLocNorm = normalize(positionLocal);
+    const vTanL = normalize(cross(vec3(0.0, 1.0, 0.0), pLocNorm));
+    const vBitL = normalize(cross(pLocNorm, vTanL));
+
+    const pTanL = normalize(positionLocal.add(vTanL.mul(waveEps)));
+    const pBitL = normalize(positionLocal.add(vBitL.mul(waveEps)));
+
+    const hWaveTan = getWaveHeightAt(pTanL);
+    const hWaveBit = getWaveHeightAt(pBitL);
+
+    const dWaveTan = hWaveTan.sub(hWave0).div(waveEps);
+    const dWaveBit = hWaveBit.sub(hWave0).div(waveEps);
+
+    const waveGradLocal = vTanL.mul(dWaveTan).add(vBitL.mul(dWaveBit)).mul(waveHeightUniform);
+    const normWorld = normalize(positionWorld);
+    const waveNormWorld = normalize(normWorld.sub(waveGradLocal));
+
+    // Smoothly blend wave normal for ocean regions
+    const oceanNormWorld = mix(normWorld, waveNormWorld, spec);
 
     // Fresnel reflection & View direction calculations
     const viewDirWorld = normalize(cameraPosition.sub(positionWorld));
-    const normWorld = normalize(positionWorld);
-    const cosView = max(float(0.0), dot(normWorld, viewDirWorld));
-    const fresnelVal = pow(float(1.0).sub(cosView), float(3.0)).mul(fresnelStrengthUniform).mul(spec);
-    const fresnelGlow = vec3(0.5, 0.8, 1.0).mul(fresnelVal);
+    const cosViewWave = max(float(0.0), dot(oceanNormWorld, viewDirWorld));
+    const fresnelVal = pow(float(1.0).sub(cosViewWave), float(4.0)).mul(fresnelStrengthUniform).mul(spec);
+    const fresnelGlow = vec3(0.25, 0.55, 0.85).mul(fresnelVal);
 
-    // Subsurface Scattering (sunlight scattering through shallow water / wave crests)
-    const sunLight = max(float(0.0), dot(normWorld, sunDir));
-    const forwardScatter = pow(max(float(0.0), dot(viewDirWorld, sunDir.negate())), float(2.0)).add(0.4);
-    const sssGlow = sssColorUniform.mul(sssIntensityUniform).mul(sunLight).mul(forwardScatter).mul(depthFactor.add(0.2)).mul(spec);
+    // Subsurface Scattering (sunlight scattering through ocean depth)
+    const sunLight = max(float(0.0), dot(oceanNormWorld, sunDir));
+    const forwardScatter = pow(max(float(0.0), dot(viewDirWorld, sunDir.negate())), float(3.0)).add(0.2);
+    const sssGlow = sssColorUniform.mul(sssIntensityUniform).mul(sunLight).mul(forwardScatter).mul(depthFactor).mul(spec);
+
+    // Specular Sun Glint & Wave Micro-Facet Sparkles
+    const halfDirWorld = normalize(sunDir.add(viewDirWorld));
+    const NdotH = max(float(0.0), dot(oceanNormWorld, halfDirWorld));
+    
+    // Sharp specular glint (120 exponent) + broader wave sparkle (20 exponent)
+    const sunGlint = pow(NdotH, float(120.0)).mul(1.5).mul(spec);
+    const waveSparkle = pow(NdotH, float(20.0)).mul(0.4).mul(waveSparkleUniform).mul(spec);
+    const waveSparkleGlow = vec3(1.0, 0.95, 0.85).mul(sunGlint).add(vec3(0.5, 0.75, 1.0).mul(waveSparkle)).mul(sunLight);
+
+    // Wave Crest Foam (foam along wave peaks on open ocean)
+    const waveCrestFoam = smoothstep(0.62, 0.82, hWave0).mul(foamIntensityUniform).mul(spec).mul(0.6);
+    const oceanSurfaceWithWaves = mix(oceanSurfaceTex, vec3(0.92, 0.96, 1.0), waveCrestFoam);
+
+    // Coastal Shelf Foam (originates at continent shoreline and fades outward into ocean)
+    const foamMin = foamThresholdUniform.sub(coastalFadeDistanceUniform).clamp(0.0, 1.0);
+    const coastalFoamMask = smoothstep(foamMin, foamThresholdUniform, depthFactor).mul(pow(spec, float(2.0))).mul(0.5);
+    const finalSurfaceTex = mix(oceanSurfaceWithWaves, vec3(0.90, 0.94, 0.98), coastalFoamMask.mul(foamIntensityUniform));
 
     // SST / GIBS Data Overlay
     const gibsEnabledUniform = uniform(CONSTANTS.GUI.EARTH.GIBS_ENABLED ? 1.0 : 0.0);
@@ -283,7 +382,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const bumpVal = texture(bumpMapTex).r;
     earthMaterial.positionNode = positionLocal.add(normalize(positionLocal).mul(bumpVal.mul(displacementScaleUniform)));
 
-    const rawLitEarthColor = finalSurfaceTex.add(fresnelGlow).add(sssGlow).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer);
+    const rawLitEarthColor = finalSurfaceTex.add(fresnelGlow).add(sssGlow).add(waveSparkleGlow).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer);
     const earthBaseColor = mix(rawLitEarthColor, vec3(0.0), gibsFactor);
 
     earthMaterial.colorNode = Fn(() => {

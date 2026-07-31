@@ -287,6 +287,30 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       .step(0.005)
       .name("Coastal Fade Distance");
   }
+  if (earth.userData.waveHeight) {
+    oceanFolder
+      .add(earth.userData.waveHeight, "value", 0.0, 0.3)
+      .step(0.005)
+      .name("Wave Height");
+  }
+  if (earth.userData.waveScale) {
+    oceanFolder
+      .add(earth.userData.waveScale, "value", 1.0, 50.0)
+      .step(0.5)
+      .name("Wave Scale");
+  }
+  if (earth.userData.waveSpeed) {
+    oceanFolder
+      .add(earth.userData.waveSpeed, "value", 0.0, 5.0)
+      .step(0.05)
+      .name("Wave Speed");
+  }
+  if (earth.userData.waveSparkle) {
+    oceanFolder
+      .add(earth.userData.waveSparkle, "value", 0.0, 2.0)
+      .step(0.05)
+      .name("Wave Sparkle");
+  }
 
   const atmosFolder = earthGroup.addFolder("Atmosphere");
   const atmosConfig = {
