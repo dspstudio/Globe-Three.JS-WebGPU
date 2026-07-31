@@ -202,31 +202,30 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     .name("Self-Shadow Offset");
 
   const oceanFolder = earthGroup.addFolder("Ocean Settings");
-  oceanFolder
+
+  // Subfolder 1: Surface & Optics
+  const opticsFolder = oceanFolder.addFolder("Surface & Optics");
+  opticsFolder
     .add(earth.userData.waterRoughness, "value", 0.0, 1.0)
     .name("Water Roughness");
-  oceanFolder
+  opticsFolder
     .add(earth.userData.waterMetalness, "value", 0.0, 1.0)
     .name("Water Metalness");
   if (earth.userData.waterIor) {
-    oceanFolder
+    opticsFolder
       .add(earth.userData.waterIor, "value", 1.0, 2.0)
       .step(0.01)
       .name("Index of Refraction (IOR)");
   }
-  if (earth.userData.waterClarity) {
-    oceanFolder
-      .add(earth.userData.waterClarity, "value", 0.0, 1.0)
-      .step(0.01)
-      .name("Water Clarity");
-  }
-  if (earth.userData.bathymetryIntensity) {
-    oceanFolder
-      .add(earth.userData.bathymetryIntensity, "value", 0.0, 2.0)
-      .step(0.01)
-      .name("Bathymetry Detail");
+  if (earth.userData.fresnelStrength) {
+    opticsFolder
+      .add(earth.userData.fresnelStrength, "value", 0.0, 3.0)
+      .step(0.05)
+      .name("Fresnel Strength");
   }
 
+  // Subfolder 2: Color & Bathymetry
+  const colorFolder = oceanFolder.addFolder("Color & Bathymetry");
   const oceanColors = {
     shallow: earth.userData.oceanShallowColor ? earth.userData.oceanShallowColor.value.getHex() : CONSTANTS.GUI.OCEAN.SHALLOW_COLOR,
     deep: earth.userData.oceanDeepColor ? earth.userData.oceanDeepColor.value.getHex() : CONSTANTS.GUI.OCEAN.DEEP_COLOR,
@@ -234,7 +233,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   };
 
   if (earth.userData.oceanShallowColor) {
-    oceanFolder
+    colorFolder
       .addColor(oceanColors, "shallow")
       .name("Shallow Water Color")
       .onChange((c: any) => {
@@ -242,21 +241,30 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       });
   }
   if (earth.userData.oceanDeepColor) {
-    oceanFolder
+    colorFolder
       .addColor(oceanColors, "deep")
       .name("Deep Water Color")
       .onChange((c: any) => {
         earth.userData.oceanDeepColor.value.set(c);
       });
   }
-  if (earth.userData.fresnelStrength) {
-    oceanFolder
-      .add(earth.userData.fresnelStrength, "value", 0.0, 3.0)
-      .step(0.05)
-      .name("Fresnel Strength");
+  if (earth.userData.waterClarity) {
+    colorFolder
+      .add(earth.userData.waterClarity, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Water Clarity");
   }
+  if (earth.userData.bathymetryIntensity) {
+    colorFolder
+      .add(earth.userData.bathymetryIntensity, "value", 0.0, 2.0)
+      .step(0.01)
+      .name("Bathymetry Detail");
+  }
+
+  // Subfolder 3: Subsurface Scattering (SSS)
+  const sssFolder = oceanFolder.addFolder("Subsurface Scattering");
   if (earth.userData.sssColor) {
-    oceanFolder
+    sssFolder
       .addColor(oceanColors, "sss")
       .name("SSS Color")
       .onChange((c: any) => {
@@ -264,52 +272,67 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       });
   }
   if (earth.userData.sssIntensity) {
-    oceanFolder
+    sssFolder
       .add(earth.userData.sssIntensity, "value", 0.0, 2.0)
       .step(0.05)
       .name("SSS Intensity");
   }
-  if (earth.userData.foamThreshold) {
-    oceanFolder
-      .add(earth.userData.foamThreshold, "value", 0.0, 1.0)
-      .step(0.01)
-      .name("Foam Threshold");
-  }
-  if (earth.userData.foamIntensity) {
-    oceanFolder
-      .add(earth.userData.foamIntensity, "value", 0.0, 1.0)
-      .step(0.01)
-      .name("Foam Intensity");
-  }
-  if (earth.userData.coastalFadeDistance) {
-    oceanFolder
-      .add(earth.userData.coastalFadeDistance, "value", 0.001, 0.5)
-      .step(0.005)
-      .name("Coastal Fade Distance");
+
+  // Subfolder 4: Procedural Waves
+  const wavesFolder = oceanFolder.addFolder("Procedural Waves");
+  if (earth.userData.wavesEnabled) {
+    const waveState = { enabled: earth.userData.wavesEnabled.value > 0.5 };
+    wavesFolder
+      .add(waveState, "enabled")
+      .name("Show Waves")
+      .onChange((v: boolean) => {
+        earth.userData.wavesEnabled.value = v ? 1.0 : 0.0;
+      });
   }
   if (earth.userData.waveHeight) {
-    oceanFolder
+    wavesFolder
       .add(earth.userData.waveHeight, "value", 0.0, 0.3)
       .step(0.005)
       .name("Wave Height");
   }
   if (earth.userData.waveScale) {
-    oceanFolder
+    wavesFolder
       .add(earth.userData.waveScale, "value", 1.0, 50.0)
       .step(0.5)
       .name("Wave Scale");
   }
   if (earth.userData.waveSpeed) {
-    oceanFolder
+    wavesFolder
       .add(earth.userData.waveSpeed, "value", 0.0, 5.0)
       .step(0.05)
       .name("Wave Speed");
   }
   if (earth.userData.waveSparkle) {
-    oceanFolder
+    wavesFolder
       .add(earth.userData.waveSparkle, "value", 0.0, 2.0)
       .step(0.05)
       .name("Wave Sparkle");
+  }
+
+  // Subfolder 5: Foam & Shoreline
+  const foamFolder = oceanFolder.addFolder("Foam & Shoreline");
+  if (earth.userData.foamThreshold) {
+    foamFolder
+      .add(earth.userData.foamThreshold, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Foam Threshold");
+  }
+  if (earth.userData.foamIntensity) {
+    foamFolder
+      .add(earth.userData.foamIntensity, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Foam Intensity");
+  }
+  if (earth.userData.coastalFadeDistance) {
+    foamFolder
+      .add(earth.userData.coastalFadeDistance, "value", 0.001, 0.5)
+      .step(0.005)
+      .name("Coastal Fade Distance");
   }
 
   const atmosFolder = earthGroup.addFolder("Atmosphere");
@@ -1066,6 +1089,22 @@ export function buildGui(gui: GUI, options: GuiOptions) {
         OCEAN: {
           ROUGHNESS: earth.userData.waterRoughness.value,
           METALNESS: earth.userData.waterMetalness.value,
+          BATHYMETRY_INTENSITY: earth.userData.bathymetryIntensity ? earth.userData.bathymetryIntensity.value : CONSTANTS.GUI.OCEAN.BATHYMETRY_INTENSITY,
+          SHALLOW_COLOR: earth.userData.oceanShallowColor ? earth.userData.oceanShallowColor.value.getHex() : CONSTANTS.GUI.OCEAN.SHALLOW_COLOR,
+          DEEP_COLOR: earth.userData.oceanDeepColor ? earth.userData.oceanDeepColor.value.getHex() : CONSTANTS.GUI.OCEAN.DEEP_COLOR,
+          WATER_CLARITY: earth.userData.waterClarity ? earth.userData.waterClarity.value : CONSTANTS.GUI.OCEAN.WATER_CLARITY,
+          IOR: earth.userData.waterIor ? earth.userData.waterIor.value : CONSTANTS.GUI.OCEAN.IOR,
+          FRESNEL_STRENGTH: earth.userData.fresnelStrength ? earth.userData.fresnelStrength.value : CONSTANTS.GUI.OCEAN.FRESNEL_STRENGTH,
+          SSS_COLOR: earth.userData.sssColor ? earth.userData.sssColor.value.getHex() : CONSTANTS.GUI.OCEAN.SSS_COLOR,
+          SSS_INTENSITY: earth.userData.sssIntensity ? earth.userData.sssIntensity.value : CONSTANTS.GUI.OCEAN.SSS_INTENSITY,
+          FOAM_THRESHOLD: earth.userData.foamThreshold ? earth.userData.foamThreshold.value : CONSTANTS.GUI.OCEAN.FOAM_THRESHOLD,
+          FOAM_INTENSITY: earth.userData.foamIntensity ? earth.userData.foamIntensity.value : CONSTANTS.GUI.OCEAN.FOAM_INTENSITY,
+          COASTAL_FADE_DISTANCE: earth.userData.coastalFadeDistance ? earth.userData.coastalFadeDistance.value : CONSTANTS.GUI.OCEAN.COASTAL_FADE_DISTANCE,
+          WAVES_ENABLED: earth.userData.wavesEnabled ? earth.userData.wavesEnabled.value > 0.5 : true,
+          WAVE_HEIGHT: earth.userData.waveHeight ? earth.userData.waveHeight.value : CONSTANTS.GUI.OCEAN.WAVE_HEIGHT,
+          WAVE_SCALE: earth.userData.waveScale ? earth.userData.waveScale.value : CONSTANTS.GUI.OCEAN.WAVE_SCALE,
+          WAVE_SPEED: earth.userData.waveSpeed ? earth.userData.waveSpeed.value : CONSTANTS.GUI.OCEAN.WAVE_SPEED,
+          WAVE_SPARKLE: earth.userData.waveSparkle ? earth.userData.waveSparkle.value : CONSTANTS.GUI.OCEAN.WAVE_SPARKLE,
         },
         EARTH: {
           ROTATION_SPEED: earthSettings.rotationSpeed,

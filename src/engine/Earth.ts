@@ -147,6 +147,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const foamThresholdUniform = uniform(CONSTANTS.GUI.OCEAN.FOAM_THRESHOLD);
     const foamIntensityUniform = uniform(CONSTANTS.GUI.OCEAN.FOAM_INTENSITY);
     const coastalFadeDistanceUniform = uniform(CONSTANTS.GUI.OCEAN.COASTAL_FADE_DISTANCE);
+    const wavesEnabledUniform = uniform(CONSTANTS.GUI.OCEAN.WAVES_ENABLED !== false ? 1.0 : 0.0);
     const waveHeightUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_HEIGHT || 0.05);
     const waveScaleUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_SCALE || 18.0);
     const waveSpeedUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_SPEED || 0.8);
@@ -165,6 +166,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     group.userData.foamThreshold = foamThresholdUniform;
     group.userData.foamIntensity = foamIntensityUniform;
     group.userData.coastalFadeDistance = coastalFadeDistanceUniform;
+    group.userData.wavesEnabled = wavesEnabledUniform;
     group.userData.waveHeight = waveHeightUniform;
     group.userData.waveScale = waveScaleUniform;
     group.userData.waveSpeed = waveSpeedUniform;
@@ -325,7 +327,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const dWaveTan = hWaveTan.sub(hWave0).div(waveEps);
     const dWaveBit = hWaveBit.sub(hWave0).div(waveEps);
 
-    const waveGradLocal = vTanL.mul(dWaveTan).add(vBitL.mul(dWaveBit)).mul(waveHeightUniform);
+    const waveGradLocal = vTanL.mul(dWaveTan).add(vBitL.mul(dWaveBit)).mul(waveHeightUniform).mul(wavesEnabledUniform);
     const normWorld = normalize(positionWorld);
     const waveNormWorld = normalize(normWorld.sub(waveGradLocal));
 
@@ -349,11 +351,11 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     
     // Sharp specular glint (120 exponent) + broader wave sparkle (20 exponent)
     const sunGlint = pow(NdotH, float(120.0)).mul(1.5).mul(spec);
-    const waveSparkle = pow(NdotH, float(20.0)).mul(0.4).mul(waveSparkleUniform).mul(spec);
-    const waveSparkleGlow = vec3(1.0, 0.95, 0.85).mul(sunGlint).add(vec3(0.5, 0.75, 1.0).mul(waveSparkle)).mul(sunLight);
+    const waveSparkle = pow(NdotH, float(20.0)).mul(0.4).mul(spec);
+    const waveSparkleGlow = vec3(1.0, 0.95, 0.85).mul(sunGlint).add(vec3(0.5, 0.75, 1.0).mul(waveSparkle)).mul(sunLight).mul(wavesEnabledUniform).mul(waveSparkleUniform);
 
     // Wave Crest Foam (foam along wave peaks on open ocean)
-    const waveCrestFoam = smoothstep(0.62, 0.82, hWave0).mul(foamIntensityUniform).mul(spec).mul(0.6);
+    const waveCrestFoam = smoothstep(0.62, 0.82, hWave0).mul(foamIntensityUniform).mul(spec).mul(0.6).mul(wavesEnabledUniform);
     const oceanSurfaceWithWaves = mix(oceanSurfaceTex, vec3(0.92, 0.96, 1.0), waveCrestFoam);
 
     // Coastal Shelf Foam (originates at continent shoreline and fades outward into ocean)

@@ -176,6 +176,7 @@ export const CONSTANTS = {
       FOAM_THRESHOLD: 0.95,
       FOAM_INTENSITY: 0.05,
       COASTAL_FADE_DISTANCE: 0.1,
+      WAVES_ENABLED: true,
       WAVE_HEIGHT: 0.05,
       WAVE_SCALE: 18.0,
       WAVE_SPEED: 0.8,
