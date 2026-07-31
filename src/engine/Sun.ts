@@ -8,7 +8,7 @@ import {
   pow,
   clamp,
   dot,
-  transformedNormalView,
+  normalView,
   positionLocal,
   uv,
   Fn,
@@ -122,7 +122,7 @@ export async function createSun(textureLoader: THREE.TextureLoader): Promise<{
 
   // Limb darkening (edges slightly warmer/darker)
   const viewDot = clamp(
-    dot(transformedNormalView, vec3(0.0, 0.0, 1.0)),
+    dot(normalView, vec3(0.0, 0.0, 1.0)),
     float(0.0),
     float(1.0)
   );

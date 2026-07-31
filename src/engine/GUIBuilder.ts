@@ -155,7 +155,388 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   } = options;
 
 
-  const envGroup = gui.addFolder("Environment Settings");
+  // ==========================================
+  // GROUP 1: EARTH & SURFACE
+  // ==========================================
+  const earthGroup = gui.addFolder("Earth & Surface");
+
+  earthGroup.add(earthSettings, "trueInclination").name("True Inclination");
+  earthGroup
+    .add(earthSettings, "rotationSpeed", 0.0, 0.01)
+    .name("Rotation Speed")
+    .step(0.0001);
+
+  const terrainFolder = earthGroup.addFolder("Terrain Settings");
+  const terrainSettings = {
+    bumpScale: CONSTANTS.GUI.EARTH.BUMP_SCALE,
+  };
+  terrainFolder
+    .add(terrainSettings, "bumpScale", 0.0, 10.0)
+    .name("Bump Map Scale")
+    .onChange((v: number) => {
+      earth.userData.bumpScale.value.set(v, v);
+    });
+  if (earth.userData.displacementScale) {
+    terrainFolder
+      .add(earth.userData.displacementScale, "value", 0.0, 0.2)
+      .step(0.005)
+      .name("Displacement Scale");
+  }
+  if (earth.userData.landRoughness) {
+    terrainFolder
+      .add(earth.userData.landRoughness, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Land Roughness");
+  }
+  if (earth.userData.ndviEnhance) {
+    terrainFolder
+      .add(earth.userData.ndviEnhance, "value", 0.0, 1.0)
+      .step(0.02)
+      .name("Vegetation Boost (NDVI)");
+  }
+  terrainFolder
+    .add(earth.userData.terrainShadowIntensity, "value", 0.0, 5.0)
+    .name("Self-Shadow Intensity");
+  terrainFolder
+    .add(earth.userData.terrainShadowOffset, "value", 0.0001, 0.01)
+    .name("Self-Shadow Offset");
+
+  const oceanFolder = earthGroup.addFolder("Ocean Settings");
+  oceanFolder
+    .add(earth.userData.waterRoughness, "value", 0.0, 1.0)
+    .name("Water Roughness");
+  oceanFolder
+    .add(earth.userData.waterMetalness, "value", 0.0, 1.0)
+    .name("Water Metalness");
+  if (earth.userData.waterIor) {
+    oceanFolder
+      .add(earth.userData.waterIor, "value", 1.0, 2.0)
+      .step(0.01)
+      .name("Index of Refraction (IOR)");
+  }
+  if (earth.userData.waterClarity) {
+    oceanFolder
+      .add(earth.userData.waterClarity, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Water Clarity");
+  }
+  if (earth.userData.bathymetryIntensity) {
+    oceanFolder
+      .add(earth.userData.bathymetryIntensity, "value", 0.0, 2.0)
+      .step(0.01)
+      .name("Bathymetry Detail");
+  }
+
+  const oceanColors = {
+    shallow: earth.userData.oceanShallowColor ? earth.userData.oceanShallowColor.value.getHex() : CONSTANTS.GUI.OCEAN.SHALLOW_COLOR,
+    deep: earth.userData.oceanDeepColor ? earth.userData.oceanDeepColor.value.getHex() : CONSTANTS.GUI.OCEAN.DEEP_COLOR,
+    sss: earth.userData.sssColor ? earth.userData.sssColor.value.getHex() : CONSTANTS.GUI.OCEAN.SSS_COLOR,
+  };
+
+  if (earth.userData.oceanShallowColor) {
+    oceanFolder
+      .addColor(oceanColors, "shallow")
+      .name("Shallow Water Color")
+      .onChange((c: any) => {
+        earth.userData.oceanShallowColor.value.set(c);
+      });
+  }
+  if (earth.userData.oceanDeepColor) {
+    oceanFolder
+      .addColor(oceanColors, "deep")
+      .name("Deep Water Color")
+      .onChange((c: any) => {
+        earth.userData.oceanDeepColor.value.set(c);
+      });
+  }
+  if (earth.userData.fresnelStrength) {
+    oceanFolder
+      .add(earth.userData.fresnelStrength, "value", 0.0, 3.0)
+      .step(0.05)
+      .name("Fresnel Strength");
+  }
+  if (earth.userData.sssColor) {
+    oceanFolder
+      .addColor(oceanColors, "sss")
+      .name("SSS Color")
+      .onChange((c: any) => {
+        earth.userData.sssColor.value.set(c);
+      });
+  }
+  if (earth.userData.sssIntensity) {
+    oceanFolder
+      .add(earth.userData.sssIntensity, "value", 0.0, 2.0)
+      .step(0.05)
+      .name("SSS Intensity");
+  }
+  if (earth.userData.foamThreshold) {
+    oceanFolder
+      .add(earth.userData.foamThreshold, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Foam Threshold");
+  }
+  if (earth.userData.foamIntensity) {
+    oceanFolder
+      .add(earth.userData.foamIntensity, "value", 0.0, 1.0)
+      .step(0.01)
+      .name("Foam Intensity");
+  }
+  if (earth.userData.coastalFadeDistance) {
+    oceanFolder
+      .add(earth.userData.coastalFadeDistance, "value", 0.001, 0.5)
+      .step(0.005)
+      .name("Coastal Fade Distance");
+  }
+
+  const atmosFolder = earthGroup.addFolder("Atmosphere");
+  const atmosConfig = {
+    mode: CONSTANTS.GUI.ATMOSPHERE.MODE,
+  };
+  atmosFolder
+    .add(atmosConfig, "mode", ["Scattering", "Airglow"])
+    .name("Mode")
+    .onChange((m: string) => {
+      earth.userData.atmosMode.value = m === "Scattering" ? 0.0 : 1.0;
+    });
+
+  const atmosColors = {
+    rayleigh: earth.userData.rayleighColor.value.getHex(),
+    mie: earth.userData.mieColor.value.getHex(),
+    twilight: earth.userData.twilightColor.value.getHex(),
+    airglow: earth.userData.airglowColor.value.getHex(),
+  };
+  atmosFolder
+    .addColor(atmosColors, "rayleigh")
+    .name("Rayleigh Color")
+    .onChange((c: number) => {
+      earth.userData.rayleighColor.value.setHex(c);
+    });
+  atmosFolder
+    .addColor(atmosColors, "mie")
+    .name("Mie Color")
+    .onChange((c: number) => {
+      earth.userData.mieColor.value.setHex(c);
+    });
+  atmosFolder
+    .addColor(atmosColors, "twilight")
+    .name("Twilight Color")
+    .onChange((c: number) => {
+      earth.userData.twilightColor.value.setHex(c);
+    });
+  atmosFolder
+    .addColor(atmosColors, "airglow")
+    .name("Airglow Color")
+    .onChange((c: number) => {
+      earth.userData.airglowColor.value.setHex(c);
+    });
+  atmosFolder
+    .add(earth.userData.atmosDensity, "value", 0.1, 100.0)
+    .name("Density");
+  atmosFolder
+    .add(earth.userData.rayleighIntensity, "value", 0.0, 5.0)
+    .step(0.1)
+    .name("Rayleigh Intensity");
+  atmosFolder
+    .add(earth.userData.darkSideBrightness, "value", 0.0, 0.5)
+    .step(0.001)
+    .name("Overall Dark Side");
+  atmosFolder
+    .add(earth.userData.cityLights, "value", 0.0, 20.0)
+    .step(0.1)
+    .name("City Lights");
+
+  const shadowFolder = earthGroup.addFolder("Cloud Shadows");
+  const shadowSettings = {
+    color: earth.userData.shadowColor.value.getHex(),
+  };
+  shadowFolder.add(earth.userData.shadowDist, "value", 0.01, 0.5, 0.005).name("Altitude Offset");
+  shadowFolder
+    .add(earth.userData.shadowIntensity, "value", 0, 1)
+    .name("Intensity");
+  shadowFolder
+    .addColor(shadowSettings, "color")
+    .name("Color")
+    .onChange((c: number) => {
+      earth.userData.shadowColor.value.setHex(c);
+    });
+
+  if (earth.userData.cutawayProgress) {
+    const cutawayFolder = earthGroup.addFolder("Cross-Section (Inner Core)");
+    const cutawayConfig = {
+      progress: earth.userData.cutawayProgress.value,
+      showHud: false,
+      toggleCutaway: () => {
+        const current = earth.userData.cutawayProgress.value;
+        const target = current > 0.5 ? 0.0 : 1.0;
+        earth.userData.cutawayProgress.value = target;
+        if (earth.userData.innerLayers) {
+          const inner = earth.userData.innerLayers;
+          if (inner.userData.updateSubLayerVisibilities) {
+            inner.userData.updateSubLayerVisibilities(target);
+          } else {
+            inner.visible = target > 0.0001;
+          }
+        }
+        cutawayConfig.progress = target;
+        window.dispatchEvent(new CustomEvent('cutaway-changed', { detail: { value: target } }));
+        gui.controllersRecursive().forEach((c) => c.updateDisplay());
+      }
+    };
+
+    cutawayFolder
+      .add(cutawayConfig, "showHud")
+      .name("Show Layer HUD")
+      .onChange((visible: boolean) => {
+        window.dispatchEvent(new CustomEvent("toggle-layer-hud", { detail: { visible } }));
+      });
+
+    cutawayFolder
+      .add(cutawayConfig, "progress", 0.0, 1.0, 0.01)
+      .name("Cutaway Depth")
+      .onChange((v: number) => {
+        earth.userData.cutawayProgress.value = v;
+        if (earth.userData.innerLayers) {
+          const inner = earth.userData.innerLayers;
+          if (inner.userData.updateSubLayerVisibilities) {
+            inner.userData.updateSubLayerVisibilities(v);
+          } else {
+            inner.visible = v > 0.0001;
+          }
+        }
+      });
+    cutawayFolder
+      .add(cutawayConfig, "toggleCutaway")
+      .name("Toggle Cutaway");
+
+    window.addEventListener("layer-hud-changed", (e: any) => {
+      if (e && e.detail && typeof e.detail.visible === "boolean") {
+        cutawayConfig.showHud = e.detail.visible;
+        gui.controllersRecursive().forEach((c) => c.updateDisplay());
+      }
+    });
+  }
+
+  // ==========================================
+  // GROUP 2: MAP & DATA OVERLAYS
+  // ==========================================
+  const mapGroup = gui.addFolder("Map & Data Overlays");
+
+  if (citiesSettings) {
+    mapGroup.add(citiesSettings, "enabled").name("Show Cities");
+  }
+
+  if (options.countryBorders) {
+    const borders = options.countryBorders;
+    const bordersFolder = mapGroup.addFolder("Country Borders");
+    bordersFolder
+      .add(borders.settings, "enabled")
+      .name("Show Wireframe")
+      .onChange((v: boolean) => {
+        borders.setEnabled(v);
+      });
+    bordersFolder
+      .addColor(borders.settings, "color")
+      .name("Line Color")
+      .onChange((c: number) => {
+        borders.setColor(c);
+      });
+    bordersFolder
+      .add(borders.settings, "opacity", 0.01, 1.0, 0.01)
+      .name("Opacity")
+      .onChange((v: number) => {
+        borders.setOpacity(v);
+      });
+  }
+
+  if (options.countryLabels) {
+    const labels = options.countryLabels;
+    const labelsFolder = mapGroup.addFolder("Country Labels");
+    labelsFolder.add(labels.settings, "enabled").name("Show Names");
+    labelsFolder.add(labels.settings, "maxVisible", 10, 100, 1).name("Max On Screen");
+    labelsFolder.add(labels.settings, "fadeDistanceFar", 25, 50, 1).name("Far Reveal Zoom");
+    labelsFolder.add(labels.settings, "fadeDistanceMid", 18, 35, 1).name("Mid Reveal Zoom");
+    labelsFolder.add(labels.settings, "fadeDistanceClose", 12, 25, 1).name("Close Reveal Zoom");
+  }
+
+  if (options.graticule) {
+    const graticule = options.graticule;
+    const gridFolder = mapGroup.addFolder("Lat / Lon Grid");
+    gridFolder
+      .add(graticule.settings, "enabled")
+      .name("Show Grid")
+      .onChange((v: boolean) => {
+        graticule.setEnabled(v);
+      });
+    gridFolder
+      .add(graticule.settings, "step", { "5°": 5, "10°": 10, "15°": 15, "30°": 30, "45°": 45 })
+      .name("Interval")
+      .onChange((v: any) => {
+        graticule.setStep(Number(v));
+      });
+    gridFolder
+      .addColor(graticule.settings, "color")
+      .name("Line Color")
+      .onChange((c: number) => {
+        graticule.setColor(c);
+      });
+    gridFolder
+      .add(graticule.settings, "opacity", 0.01, 1.0, 0.01)
+      .name("Opacity")
+      .onChange((v: number) => {
+        graticule.setOpacity(v);
+      });
+  }
+
+  if (earth.userData.gibsEnabled && earth.userData.gibsOpacity) {
+    const gibsFolder = mapGroup.addFolder("GIBS Data Overlays");
+    const gibsState = {
+      enabled: earth.userData.gibsEnabled.value > 0.5,
+      layer: earth.userData.gibsLayer.value > 0.5 ? "MODIS Terra NDVI 8-Day" : "Sea Surface Temp Anomalies"
+    };
+    
+    gibsFolder
+      .add(gibsState, "layer", ["Sea Surface Temp Anomalies", "MODIS Terra NDVI 8-Day"])
+      .name("Layer")
+      .onChange((v: string) => {
+        earth.userData.gibsLayer.value = v === "MODIS Terra NDVI 8-Day" ? 1.0 : 0.0;
+      });
+
+    gibsFolder
+      .add(gibsState, "enabled")
+      .name("Show Overlay")
+      .onChange((v: boolean) => {
+        earth.userData.gibsEnabled.value = v ? 1.0 : 0.0;
+      });
+
+    gibsFolder
+      .add(earth.userData.gibsOpacity, "value", 0.0, 1.0)
+      .step(0.05)
+      .name("Opacity");
+  }
+
+  if (satelliteSettings) {
+    const satGroup = mapGroup.addFolder("Satellites");
+    
+    satGroup.add(satelliteSettings, "enabled").name("Show Satellites").onChange((val: boolean) => {
+      if (satellitePoints) {
+        satellitePoints.visible = val;
+      }
+    });
+
+    const satColorObj = { color: satelliteSettings.color };
+    satGroup.addColor(satColorObj, "color").name("Color").onChange((val: number) => {
+      if (satellitePoints && satellitePoints.userData.colorUniform) {
+        satellitePoints.userData.colorUniform.value.setHex(val);
+      }
+    });
+
+    satGroup.add(satelliteSettings, "speedScale", 0.0, 5.0).step(0.1).name("Orbit Speed");
+  }
+
+  // ==========================================
+  // GROUP 3: ENVIRONMENT & SPACE
+  // ==========================================
+  const envGroup = gui.addFolder("Environment & Space");
 
   const sunFolder = envGroup.addFolder("Sun & Lighting");
   const sunVisualSettings = {
@@ -278,7 +659,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       }
     });
 
-  const skyFolder = envGroup.addFolder("Background");
+  const skyFolder = envGroup.addFolder("Background & Stars");
   skyFolder
     .add(scene, "backgroundIntensity", 0.0, 5.0)
     .name("Skybox Intensity");
@@ -310,377 +691,10 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       });
   }
 
-  const earthGroup = gui.addFolder("Earth Settings");
-
-  if (citiesSettings) {
-    earthGroup.add(citiesSettings, "enabled").name("Show Cities");
-  }
-
-  if (options.countryBorders) {
-    const borders = options.countryBorders;
-    const bordersFolder = earthGroup.addFolder("Country Borders");
-    bordersFolder
-      .add(borders.settings, "enabled")
-      .name("Show Wireframe")
-      .onChange((v: boolean) => {
-        borders.setEnabled(v);
-      });
-    bordersFolder
-      .addColor(borders.settings, "color")
-      .name("Line Color")
-      .onChange((c: number) => {
-        borders.setColor(c);
-      });
-    bordersFolder
-      .add(borders.settings, "opacity", 0.01, 1.0, 0.01)
-      .name("Opacity")
-      .onChange((v: number) => {
-        borders.setOpacity(v);
-      });
-  }
-
-  if (options.countryLabels) {
-    const labels = options.countryLabels;
-    const labelsFolder = earthGroup.addFolder("Country Labels");
-    labelsFolder.add(labels.settings, "enabled").name("Show Names");
-    labelsFolder.add(labels.settings, "maxVisible", 10, 100, 1).name("Max On Screen");
-    labelsFolder.add(labels.settings, "fadeDistanceFar", 25, 50, 1).name("Far Reveal Zoom");
-    labelsFolder.add(labels.settings, "fadeDistanceMid", 18, 35, 1).name("Mid Reveal Zoom");
-    labelsFolder.add(labels.settings, "fadeDistanceClose", 12, 25, 1).name("Close Reveal Zoom");
-  }
-
-  if (options.graticule) {
-    const graticule = options.graticule;
-    const gridFolder = earthGroup.addFolder("Lat / Lon Grid");
-    gridFolder
-      .add(graticule.settings, "enabled")
-      .name("Show Grid")
-      .onChange((v: boolean) => {
-        graticule.setEnabled(v);
-      });
-    gridFolder
-      .add(graticule.settings, "step", { "5°": 5, "10°": 10, "15°": 15, "30°": 30, "45°": 45 })
-      .name("Interval")
-      .onChange((v: any) => {
-        graticule.setStep(Number(v));
-      });
-    gridFolder
-      .addColor(graticule.settings, "color")
-      .name("Line Color")
-      .onChange((c: number) => {
-        graticule.setColor(c);
-      });
-    gridFolder
-      .add(graticule.settings, "opacity", 0.01, 1.0, 0.01)
-      .name("Opacity")
-      .onChange((v: number) => {
-        graticule.setOpacity(v);
-      });
-  }
-
-  earthGroup.add(earthSettings, "trueInclination").name("True Inclination");
-  earthGroup
-    .add(earthSettings, "rotationSpeed", 0.0, 0.01)
-    .name("Rotation Speed")
-    .step(0.0001);
-
-  if (earth.userData.cutawayProgress) {
-    const cutawayFolder = earthGroup.addFolder("Cross-Section (Inner Core)");
-    const cutawayConfig = {
-      progress: earth.userData.cutawayProgress.value,
-      showHud: false,
-      toggleCutaway: () => {
-        const current = earth.userData.cutawayProgress.value;
-        const target = current > 0.5 ? 0.0 : 1.0;
-        earth.userData.cutawayProgress.value = target;
-        if (earth.userData.innerLayers) {
-          const inner = earth.userData.innerLayers;
-          if (inner.userData.updateSubLayerVisibilities) {
-            inner.userData.updateSubLayerVisibilities(target);
-          } else {
-            inner.visible = target > 0.0001;
-          }
-        }
-        cutawayConfig.progress = target;
-        window.dispatchEvent(new CustomEvent('cutaway-changed', { detail: { value: target } }));
-        gui.controllersRecursive().forEach((c) => c.updateDisplay());
-      }
-    };
-
-    cutawayFolder
-      .add(cutawayConfig, "showHud")
-      .name("Show Layer HUD")
-      .onChange((visible: boolean) => {
-        window.dispatchEvent(new CustomEvent("toggle-layer-hud", { detail: { visible } }));
-      });
-
-    cutawayFolder
-      .add(cutawayConfig, "progress", 0.0, 1.0, 0.01)
-      .name("Cutaway Depth")
-      .onChange((v: number) => {
-        earth.userData.cutawayProgress.value = v;
-        if (earth.userData.innerLayers) {
-          const inner = earth.userData.innerLayers;
-          if (inner.userData.updateSubLayerVisibilities) {
-            inner.userData.updateSubLayerVisibilities(v);
-          } else {
-            inner.visible = v > 0.0001;
-          }
-        }
-      });
-    cutawayFolder
-      .add(cutawayConfig, "toggleCutaway")
-      .name("Toggle Cutaway");
-
-    window.addEventListener("layer-hud-changed", (e: any) => {
-      if (e && e.detail && typeof e.detail.visible === "boolean") {
-        cutawayConfig.showHud = e.detail.visible;
-        gui.controllersRecursive().forEach((c) => c.updateDisplay());
-      }
-    });
-  }
-
-  const atmosFolder = earthGroup.addFolder("Atmosphere");
-  const atmosConfig = {
-    mode: CONSTANTS.GUI.ATMOSPHERE.MODE,
-  };
-  atmosFolder
-    .add(atmosConfig, "mode", ["Scattering", "Airglow"])
-    .name("Mode")
-    .onChange((m: string) => {
-      earth.userData.atmosMode.value = m === "Scattering" ? 0.0 : 1.0;
-    });
-
-  const atmosColors = {
-    rayleigh: earth.userData.rayleighColor.value.getHex(),
-    mie: earth.userData.mieColor.value.getHex(),
-    twilight: earth.userData.twilightColor.value.getHex(),
-    airglow: earth.userData.airglowColor.value.getHex(),
-  };
-  atmosFolder
-    .addColor(atmosColors, "rayleigh")
-    .name("Rayleigh Color")
-    .onChange((c: number) => {
-      earth.userData.rayleighColor.value.setHex(c);
-    });
-  atmosFolder
-    .addColor(atmosColors, "mie")
-    .name("Mie Color")
-    .onChange((c: number) => {
-      earth.userData.mieColor.value.setHex(c);
-    });
-  atmosFolder
-    .addColor(atmosColors, "twilight")
-    .name("Twilight Color")
-    .onChange((c: number) => {
-      earth.userData.twilightColor.value.setHex(c);
-    });
-  atmosFolder
-    .addColor(atmosColors, "airglow")
-    .name("Airglow Color")
-    .onChange((c: number) => {
-      earth.userData.airglowColor.value.setHex(c);
-    });
-  atmosFolder
-    .add(earth.userData.atmosDensity, "value", 0.1, 100.0)
-    .name("Density");
-  atmosFolder
-    .add(earth.userData.rayleighIntensity, "value", 0.0, 5.0)
-    .step(0.1)
-    .name("Rayleigh Intensity");
-  atmosFolder
-    .add(earth.userData.darkSideBrightness, "value", 0.0, 0.5)
-    .step(0.001)
-    .name("Overall Dark Side");
-  atmosFolder
-    .add(earth.userData.cityLights, "value", 0.0, 20.0)
-    .step(0.1)
-    .name("City Lights");
-
-  const shadowFolder = earthGroup.addFolder("Cloud Shadows");
-  const shadowSettings = {
-    color: earth.userData.shadowColor.value.getHex(),
-  };
-  shadowFolder.add(earth.userData.shadowDist, "value", 0.01, 0.5, 0.005).name("Altitude Offset");
-  shadowFolder
-    .add(earth.userData.shadowIntensity, "value", 0, 1)
-    .name("Intensity");
-  shadowFolder
-    .addColor(shadowSettings, "color")
-    .name("Color")
-    .onChange((c: number) => {
-      earth.userData.shadowColor.value.setHex(c);
-    });
-
-  const oceanFolder = earthGroup.addFolder("Ocean Settings");
-  oceanFolder
-    .add(earth.userData.waterRoughness, "value", 0.0, 1.0)
-    .name("Water Roughness");
-  oceanFolder
-    .add(earth.userData.waterMetalness, "value", 0.0, 1.0)
-    .name("Water Metalness");
-  if (earth.userData.waterIor) {
-    oceanFolder
-      .add(earth.userData.waterIor, "value", 1.0, 2.0)
-      .step(0.01)
-      .name("Index of Refraction (IOR)");
-  }
-  if (earth.userData.waterClarity) {
-    oceanFolder
-      .add(earth.userData.waterClarity, "value", 0.0, 1.0)
-      .step(0.01)
-      .name("Water Clarity");
-  }
-  if (earth.userData.bathymetryIntensity) {
-    oceanFolder
-      .add(earth.userData.bathymetryIntensity, "value", 0.0, 2.0)
-      .step(0.01)
-      .name("Bathymetry Detail");
-  }
-
-  const oceanColors = {
-    shallow: earth.userData.oceanShallowColor ? earth.userData.oceanShallowColor.value.getHex() : CONSTANTS.GUI.OCEAN.SHALLOW_COLOR,
-    deep: earth.userData.oceanDeepColor ? earth.userData.oceanDeepColor.value.getHex() : CONSTANTS.GUI.OCEAN.DEEP_COLOR,
-    sss: earth.userData.sssColor ? earth.userData.sssColor.value.getHex() : CONSTANTS.GUI.OCEAN.SSS_COLOR,
-  };
-
-  if (earth.userData.oceanShallowColor) {
-    oceanFolder
-      .addColor(oceanColors, "shallow")
-      .name("Shallow Water Color")
-      .onChange((c: any) => {
-        earth.userData.oceanShallowColor.value.set(c);
-      });
-  }
-  if (earth.userData.oceanDeepColor) {
-    oceanFolder
-      .addColor(oceanColors, "deep")
-      .name("Deep Water Color")
-      .onChange((c: any) => {
-        earth.userData.oceanDeepColor.value.set(c);
-      });
-  }
-  if (earth.userData.fresnelStrength) {
-    oceanFolder
-      .add(earth.userData.fresnelStrength, "value", 0.0, 3.0)
-      .step(0.05)
-      .name("Fresnel Strength");
-  }
-  if (earth.userData.sssColor) {
-    oceanFolder
-      .addColor(oceanColors, "sss")
-      .name("SSS Color")
-      .onChange((c: any) => {
-        earth.userData.sssColor.value.set(c);
-      });
-  }
-  if (earth.userData.sssIntensity) {
-    oceanFolder
-      .add(earth.userData.sssIntensity, "value", 0.0, 2.0)
-      .step(0.05)
-      .name("SSS Intensity");
-  }
-  if (earth.userData.foamThreshold) {
-    oceanFolder
-      .add(earth.userData.foamThreshold, "value", 0.0, 1.0)
-      .step(0.01)
-      .name("Foam Threshold");
-  }
-  if (earth.userData.foamIntensity) {
-    oceanFolder
-      .add(earth.userData.foamIntensity, "value", 0.0, 1.0)
-      .step(0.01)
-      .name("Foam Intensity");
-  }
-  if (earth.userData.coastalFadeDistance) {
-    oceanFolder
-      .add(earth.userData.coastalFadeDistance, "value", 0.001, 0.5)
-      .step(0.005)
-      .name("Coastal Fade Distance");
-  }
-
-  const terrainFolder = earthGroup.addFolder("Terrain Settings");
-  const terrainSettings = {
-    bumpScale: CONSTANTS.GUI.EARTH.BUMP_SCALE,
-  };
-  terrainFolder
-    .add(terrainSettings, "bumpScale", 0.0, 10.0)
-    .name("Bump Map Scale")
-    .onChange((v: number) => {
-      earth.userData.bumpScale.value.set(v, v);
-    });
-  if (earth.userData.displacementScale) {
-    terrainFolder
-      .add(earth.userData.displacementScale, "value", 0.0, 0.2)
-      .step(0.005)
-      .name("Displacement Scale");
-  }
-  if (earth.userData.landRoughness) {
-    terrainFolder
-      .add(earth.userData.landRoughness, "value", 0.0, 1.0)
-      .step(0.01)
-      .name("Land Roughness");
-  }
-  if (earth.userData.ndviEnhance) {
-    terrainFolder
-      .add(earth.userData.ndviEnhance, "value", 0.0, 1.0)
-      .step(0.02)
-      .name("Vegetation Boost (NDVI)");
-  }
-  terrainFolder
-    .add(earth.userData.terrainShadowIntensity, "value", 0.0, 5.0)
-    .name("Self-Shadow Intensity");
-  terrainFolder
-    .add(earth.userData.terrainShadowOffset, "value", 0.0001, 0.01)
-    .name("Self-Shadow Offset");
-
-  if (earth.userData.gibsEnabled && earth.userData.gibsOpacity) {
-    const gibsFolder = earthGroup.addFolder("GIBS Data Overlays");
-    const gibsState = {
-      enabled: earth.userData.gibsEnabled.value > 0.5,
-      layer: earth.userData.gibsLayer.value > 0.5 ? "MODIS Terra NDVI 8-Day" : "Sea Surface Temp Anomalies"
-    };
-    
-    gibsFolder
-      .add(gibsState, "layer", ["Sea Surface Temp Anomalies", "MODIS Terra NDVI 8-Day"])
-      .name("Layer")
-      .onChange((v: string) => {
-        earth.userData.gibsLayer.value = v === "MODIS Terra NDVI 8-Day" ? 1.0 : 0.0;
-      });
-
-    gibsFolder
-      .add(gibsState, "enabled")
-      .name("Show Overlay")
-      .onChange((v: boolean) => {
-        earth.userData.gibsEnabled.value = v ? 1.0 : 0.0;
-      });
-
-    gibsFolder
-      .add(earth.userData.gibsOpacity, "value", 0.0, 1.0)
-      .step(0.05)
-      .name("Opacity");
-  }
-
-  if (satelliteSettings) {
-    const satGroup = earthGroup.addFolder("Satellites");
-    
-    satGroup.add(satelliteSettings, "enabled").name("Show Satellites").onChange((val: boolean) => {
-      if (satellitePoints) {
-        satellitePoints.visible = val;
-      }
-    });
-
-    const satColorObj = { color: satelliteSettings.color };
-    satGroup.addColor(satColorObj, "color").name("Color").onChange((val: number) => {
-      if (satellitePoints && satellitePoints.userData.colorUniform) {
-        satellitePoints.userData.colorUniform.value.setHex(val);
-      }
-    });
-
-    satGroup.add(satelliteSettings, "speedScale", 0.0, 5.0).step(0.1).name("Orbit Speed");
-  }
-
-  const postGroup = gui.addFolder("Post Processing");
+  // ==========================================
+  // GROUP 4: POST-PROCESSING & LENS EFFECTS
+  // ==========================================
+  const postGroup = gui.addFolder("Post-Processing & Lens Effects");
 
   const tmFolder = postGroup.addFolder("Tone Mapping & HDR");
   if (options.tmSettings && options.rebuildPipeline && options.tmExposureUniform) {
@@ -730,7 +744,6 @@ export function buildGui(gui: GUI, options: GuiOptions) {
           options.bloomPass.strength.value = options.bloomSettings.enabled ? options.bloomSettings.strength : 0.0;
         }
         
-        // Force update GUI controllers
         gui.controllersRecursive().forEach((c) => {
           c.updateDisplay();
         });
@@ -763,7 +776,24 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       cgUniforms.blueGreenBoost.value = v;
     });
 
-  const flareFolder = postGroup.addFolder("Lens Flare");
+  const bloomFolder = postGroup.addFolder("Bloom");
+  bloomFolder
+    .add(bloomSettings, "enabled")
+    .name("Enabled")
+    .onChange((v: boolean) => {
+      bloomPass.strength.value = v ? bloomSettings.strength : 0.0;
+    });
+  bloomFolder
+    .add(bloomSettings, "strength", 0, 5)
+    .name("Strength")
+    .onChange((v: number) => {
+      if (bloomSettings.enabled) bloomPass.strength.value = v;
+    });
+  bloomFolder.add(bloomPass.radius, "value", 0, 1).name("Radius");
+  bloomFolder.add(bloomPass.threshold, "value", 0, 1).name("Threshold");
+
+  const lensFlaresGroup = postGroup.addFolder("Lens Flares & Optical");
+  const flareFolder = lensFlaresGroup.addFolder("Solar Lens Flare");
   flareFolder.add(flareSettings, "enabled").name("Enabled");
   flareFolder.add(flareSettings, "intensity", 0.0, 1.0).name("Intensity");
   flareFolder
@@ -779,7 +809,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     .step(0.05)
     .name("Fade Duration (s)");
 
-  const anaFolder = postGroup.addFolder("Anamorphic Eclipse Flare");
+  const anaFolder = lensFlaresGroup.addFolder("Anamorphic Eclipse Flare");
   anaFolder.add(anamorphicSettings, "enabled").name("Enabled");
   anaFolder.add(anamorphicSettings, "intensity", 0.0, 2.0).name("Intensity");
   anaFolder.add(anamorphicSettings, "thickness", 0.1, 2.0).name("Thickness");
@@ -800,12 +830,12 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       anamorphicSettings.color = c;
     });
 
-  const caFolder = postGroup.addFolder("Chromatic Aberration");
+  const lensFxGroup = postGroup.addFolder("Camera Lens FX");
+  const caFolder = lensFxGroup.addFolder("Chromatic Aberration");
   caFolder
     .add(caSettings, "enabled")
     .name("Enabled")
     .onChange((v: boolean) => {
-      // Toggle by setting strength to 0.0 when disabled
       caUniforms.strength.value = v ? caSettings.strength : 0.0;
     });
   caFolder
@@ -821,7 +851,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       caUniforms.scale.value = v;
     });
 
-  const filmFolder = postGroup.addFolder("Film Grain");
+  const filmFolder = lensFxGroup.addFolder("Film Grain");
   filmFolder
     .add(filmSettings, "enabled")
     .name("Enabled")
@@ -835,7 +865,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       if (filmSettings.enabled) filmUniforms.intensity.value = v;
     });
 
-  const vignetteFolder = postGroup.addFolder("Vignette");
+  const vignetteFolder = lensFxGroup.addFolder("Vignette");
   vignetteFolder
     .add(vignetteSettings, "enabled")
     .name("Enabled")
@@ -857,23 +887,10 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       vignetteUniforms.offset.value = v;
     });
 
-  const bloomFolder = postGroup.addFolder("Bloom");
-  bloomFolder
-    .add(bloomSettings, "enabled")
-    .name("Enabled")
-    .onChange((v: boolean) => {
-      bloomPass.strength.value = v ? bloomSettings.strength : 0.0;
-    });
-  bloomFolder
-    .add(bloomSettings, "strength", 0, 5)
-    .name("Strength")
-    .onChange((v: number) => {
-      if (bloomSettings.enabled) bloomPass.strength.value = v;
-    });
-  bloomFolder.add(bloomPass.radius, "value", 0, 1).name("Radius");
-  bloomFolder.add(bloomPass.threshold, "value", 0, 1).name("Threshold");
-
-  const cameraFolder = gui.addFolder("Camera");
+  // ==========================================
+  // GROUP 5: CAMERA & CONTROLS
+  // ==========================================
+  const cameraFolder = gui.addFolder("Camera & Controls");
   cameraFolder
     .add(camera, "fov", 5, 120, 1)
     .name("Field of View")
@@ -884,13 +901,6 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   cameraFolder.add(controls, "autoRotate").name("Auto Rotate");
   cameraFolder.add(controls, "autoRotateSpeed", 0.1, 5.0).name("Rotate Speed");
 
-  // Create a temporary object for camera position fields to be able to use .listen()
-  // without allowing manual typing to break orbit controls badly, or we can just let them edit the camera pos.
-  // However, OrbitControls overrides position based on its target.
-  // To safely update camera position we should edit it but we also need to let it read from camera.position.
-
-  // Instead of directly modifying camera.position which gets overridden by OrbitControls if target is not updated properly,
-  // it's fine for simple display using listen() directly on camera.position
   const posFolder = cameraFolder.addFolder("Position (Current)");
   posFolder.add(camera.position, "x").name("X").decimals(2).listen().disable();
   posFolder.add(camera.position, "y").name("Y").decimals(2).listen().disable();
@@ -925,7 +935,10 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   };
   cameraFolder.add(camActions, "reset").name("Reset View");
 
-  const debugFolder = gui.addFolder("Display & Debug");
+  // ==========================================
+  // GROUP 6: ENGINE & DEBUG
+  // ==========================================
+  const debugFolder = gui.addFolder("Engine & Debug");
   const renderTypeController = {
     renderType: CONSTANTS.RENDER_TYPE,
   };
