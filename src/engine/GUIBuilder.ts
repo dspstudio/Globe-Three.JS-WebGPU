@@ -323,11 +323,17 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       .step(0.05)
       .name("Wave Speed");
   }
+  if (earth.userData.sunGlintPower) {
+    wavesFolder
+      .add(earth.userData.sunGlintPower, "value", 0.0, 5.0)
+      .step(0.1)
+      .name("Sun Glint Power");
+  }
   if (earth.userData.waveSparkle) {
     wavesFolder
       .add(earth.userData.waveSparkle, "value", 0.0, 2.0)
       .step(0.05)
-      .name("Wave Sparkle");
+      .name("Sparkle Intensity");
   }
 
   // Subfolder 5: Foam & Shoreline

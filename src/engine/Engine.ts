@@ -308,7 +308,7 @@ export class Engine {
     this.scene.backgroundRotation.x = CONSTANTS.GUI.ENVIRONMENT.SKYBOX_PITCH; // Pitch
     this.scene.backgroundRotation.z = CONSTANTS.GUI.ENVIRONMENT.SKYBOX_ROLL; // Roll
 
-    if (onProgress) onProgress("Loading Earth Textures (8K)");
+    if (onProgress) onProgress("Loading Earth Textures");
     const earth = await createEarth(
       this.textureLoader,
       this.sunDirUniform,

@@ -29,11 +29,9 @@ const noise2D = Fn(([p]: [any]) => {
 
 const fbm2D = Fn(([p]: [any]) => {
     const pVec = vec2(p);
-    const n1 = noise2D(pVec).mul(0.5);
-    const n2 = noise2D(pVec.mul(2.02)).mul(0.25);
-    const n3 = noise2D(pVec.mul(4.08)).mul(0.125);
-    const n4 = noise2D(pVec.mul(8.24)).mul(0.0625);
-    return n1.add(n2).add(n3).add(n4);
+    const n1 = noise2D(pVec).mul(0.65);
+    const n2 = noise2D(pVec.mul(2.02)).mul(0.35);
+    return n1.add(n2);
 });
 
 export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: any, moonPosUniform: any, maxAnisotropy: number = 1): Promise<THREE.Group> {
@@ -153,6 +151,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const waveHeightUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_HEIGHT || 0.05);
     const waveScaleUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_SCALE || 18.0);
     const waveSpeedUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_SPEED || 0.8);
+    const sunGlintPowerUniform = uniform(CONSTANTS.GUI.OCEAN.SUN_GLINT_POWER ?? 1.5);
     const waveSparkleUniform = uniform(CONSTANTS.GUI.OCEAN.WAVE_SPARKLE || 0.4);
 
     group.userData.waterRoughness = waterRoughnessUniform;
@@ -174,6 +173,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     group.userData.waveHeight = waveHeightUniform;
     group.userData.waveScale = waveScaleUniform;
     group.userData.waveSpeed = waveSpeedUniform;
+    group.userData.sunGlintPower = sunGlintPowerUniform;
     group.userData.waveSparkle = waveSparkleUniform;
     
     // Calculate shadow dimmer mask
@@ -314,26 +314,37 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
         return wx.mul(w.x).add(wy.mul(w.y)).add(wz.mul(w.z));
     });
 
-    const hWave0 = getWaveHeightAt(positionLocal);
+    const computeWaveData = Fn(() => {
+        const hWave0 = getWaveHeightAt(positionLocal);
 
-    // Wave gradient finite differences
-    const waveEps = float(0.015);
-    const pLocNorm = normalize(positionLocal);
-    const vTanL = normalize(cross(vec3(0.0, 1.0, 0.0), pLocNorm));
-    const vBitL = normalize(cross(pLocNorm, vTanL));
+        // Wave gradient finite differences
+        const waveEps = float(0.015);
+        const pLocNorm = normalize(positionLocal);
+        const vTanL = normalize(cross(vec3(0.0, 1.0, 0.0), pLocNorm));
+        const vBitL = normalize(cross(pLocNorm, vTanL));
 
-    const pTanL = normalize(positionLocal.add(vTanL.mul(waveEps)));
-    const pBitL = normalize(positionLocal.add(vBitL.mul(waveEps)));
+        const pTanL = normalize(positionLocal.add(vTanL.mul(waveEps)));
+        const pBitL = normalize(positionLocal.add(vBitL.mul(waveEps)));
 
-    const hWaveTan = getWaveHeightAt(pTanL);
-    const hWaveBit = getWaveHeightAt(pBitL);
+        const hWaveTan = getWaveHeightAt(pTanL);
+        const hWaveBit = getWaveHeightAt(pBitL);
 
-    const dWaveTan = hWaveTan.sub(hWave0).div(waveEps);
-    const dWaveBit = hWaveBit.sub(hWave0).div(waveEps);
+        const dWaveTan = hWaveTan.sub(hWave0).div(waveEps);
+        const dWaveBit = hWaveBit.sub(hWave0).div(waveEps);
 
-    const waveGradLocal = vTanL.mul(dWaveTan).add(vBitL.mul(dWaveBit)).mul(waveHeightUniform).mul(wavesEnabledUniform);
+        const waveGradLocal = vTanL.mul(dWaveTan).add(vBitL.mul(dWaveBit)).mul(waveHeightUniform);
+        const normWorld = normalize(positionWorld);
+        const waveNormWorld = normalize(normWorld.sub(waveGradLocal));
+        return vec4(waveNormWorld, hWave0);
+    });
+
     const normWorld = normalize(positionWorld);
-    const waveNormWorld = normalize(normWorld.sub(waveGradLocal));
+    const waveData = wavesEnabledUniform.greaterThan(0.0).select(
+        computeWaveData(),
+        vec4(normWorld, float(0.0))
+    );
+    const waveNormWorld = waveData.xyz;
+    const hWave0 = waveData.w;
 
     // Smoothly blend wave normal for ocean regions
     const oceanNormWorld = mix(normWorld, waveNormWorld, spec);
@@ -353,10 +364,11 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const halfDirWorld = normalize(sunDir.add(viewDirWorld));
     const NdotH = max(float(0.0), dot(oceanNormWorld, halfDirWorld));
     
-    // Sharp specular glint (120 exponent) + broader wave sparkle (20 exponent)
-    const sunGlint = pow(NdotH, float(120.0)).mul(1.5).mul(spec);
-    const waveSparkle = pow(NdotH, float(20.0)).mul(0.4).mul(spec);
-    const waveSparkleGlow = vec3(1.0, 0.95, 0.85).mul(sunGlint).add(vec3(0.5, 0.75, 1.0).mul(waveSparkle)).mul(sunLight).mul(wavesEnabledUniform).mul(waveSparkleUniform);
+    // Direct physical specular sun reflection (sharp glint) independent of sparkle noise
+    const sunGlint = pow(NdotH, float(120.0)).mul(sunGlintPowerUniform).mul(spec);
+    // Broader wave micro-facet sparkle
+    const waveSparkle = pow(NdotH, float(20.0)).mul(0.4).mul(spec).mul(waveSparkleUniform);
+    const waveSparkleGlow = vec3(1.0, 0.95, 0.85).mul(sunGlint).add(vec3(0.5, 0.75, 1.0).mul(waveSparkle)).mul(sunLight).mul(wavesEnabledUniform);
 
     // Wave Crest Foam (foam along wave peaks on open ocean)
     const waveCrestFoam = smoothstep(0.62, 0.82, hWave0).mul(foamIntensityUniform).mul(spec).mul(0.6).mul(wavesEnabledUniform);

@@ -11,7 +11,7 @@ const MESSAGE_PROGRESS: Record<string, number> = {
     'Setting up Scene & Camera': 20,
     'Loading Celestial Objects': 30,
     'Loading Environment Map (PNG)': 50,
-    'Loading Earth Textures (8K)': 70,
+    'Loading Earth Textures': 70,
     'Building Render Pipeline': 85,
     'Compiling Shaders (Warmup)': 95,
     'Loading Complete': 100,
