@@ -28,7 +28,7 @@ import {
   updateLensFlare,
   anamorphicShader,
 } from "./LensFlare";
-import { colorGradeShader, vignetteShader } from "./ColorGrading";
+import { colorGradeShader, vignetteShader, gtUchimuraShader } from "./ColorGrading";
 import { buildGui } from "./GUIBuilder";
 import { BackgroundStars } from "./BackgroundStars";
 import { CountryBorders } from "./CountryBorders";
@@ -477,7 +477,12 @@ export class Engine {
 
       let toneMapped: any;
       const modeNum = Number(tmSettings.mode);
-      if (modeNum === THREE.NoToneMapping) {
+      if (modeNum === 99) {
+        toneMapped = gtUchimuraShader({
+          color: graded,
+          exposure: tmExposureUniform,
+        } as any);
+      } else if (modeNum === THREE.NoToneMapping) {
         toneMapped = graded;
       } else {
         toneMapped = graded.toneMapping(modeNum as THREE.ToneMapping, tmExposureUniform);

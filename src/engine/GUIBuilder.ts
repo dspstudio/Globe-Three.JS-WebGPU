@@ -810,12 +810,13 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     const tmExposureUniform = options.tmExposureUniform;
 
     const modes = {
-      "None": THREE.NoToneMapping,
+      "GT Uchimura": 99,
       "ACES Filmic": THREE.ACESFilmicToneMapping,
       "AgX": THREE.AgXToneMapping,
       "Neutral": THREE.NeutralToneMapping,
       "Reinhard": THREE.ReinhardToneMapping,
-      "Cineon": THREE.CineonToneMapping
+      "Cineon": THREE.CineonToneMapping,
+      "None": THREE.NoToneMapping,
     };
 
     tmFolder.add(tmSettings, "mode", modes)
