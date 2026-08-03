@@ -47,6 +47,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const cutDiscard = positionLocal.x.greaterThan(cutX);
 
     // Load textures
+    let imergMapTex: THREE.Texture | null = null;
     const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, bumpMapTex, sstMapTex, ndviMapTex, bathymetryMapTex] = await Promise.all([
         loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
         loader.loadAsync(CONSTANTS.TEXTURES.SPECULAR),
@@ -59,6 +60,12 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
         loader.loadAsync(CONSTANTS.TEXTURES.BATHYMETRY).catch(() => null)
     ]);
 
+    imergMapTex = await loader.loadAsync(CONSTANTS.TEXTURES.IMERG_PRECIPITATION).catch(async () => {
+        // Fallback to recent date if requested date returns no tile data
+        const fallbackUrl = "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=IMERG_Precipitation_Rate&FORMAT=image/png&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=2024-07-27";
+        return loader.loadAsync(fallbackUrl).catch(() => null);
+    });
+
     colorMapTex.colorSpace = THREE.SRGBColorSpace;
     cloudsMapTex.colorSpace = THREE.SRGBColorSpace;
     nightMapTex.colorSpace = THREE.SRGBColorSpace;
@@ -69,6 +76,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     if (ndviMapTex) {
         ndviMapTex.colorSpace = THREE.SRGBColorSpace;
         ndviMapTex.anisotropy = maxAnisotropy;
+    }
+    if (imergMapTex) {
+        imergMapTex.colorSpace = THREE.SRGBColorSpace;
+        imergMapTex.anisotropy = maxAnisotropy;
     }
     if (bathymetryMapTex) {
         bathymetryMapTex.colorSpace = THREE.SRGBColorSpace;
@@ -382,14 +393,42 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // SST / GIBS Data Overlay
     const gibsEnabledUniform = uniform(CONSTANTS.GUI.EARTH.GIBS_ENABLED ? 1.0 : 0.0);
     const gibsOpacityUniform = uniform(CONSTANTS.GUI.EARTH.GIBS_OPACITY || 0.8);
-    const gibsLayerUniform = uniform(CONSTANTS.GUI.EARTH.GIBS_LAYER === "MODIS Terra NDVI 8-Day" ? 1.0 : 0.0);
+    const initialGibsLayer = CONSTANTS.GUI.EARTH.GIBS_LAYER === "IMERG Precipitation Rate" ? 2.0 :
+                             CONSTANTS.GUI.EARTH.GIBS_LAYER === "MODIS Terra NDVI 8-Day" ? 1.0 : 0.0;
+    const gibsLayerUniform = uniform(initialGibsLayer);
     group.userData.gibsEnabled = gibsEnabledUniform;
     group.userData.gibsOpacity = gibsOpacityUniform;
     group.userData.gibsLayer = gibsLayerUniform;
 
     const sstSample = sstMapTex ? texture(sstMapTex) : vec4(0.0);
-    const gibsSample = mix(sstSample, ndviSample, gibsLayerUniform);
+    const imergSampleRaw = imergMapTex ? texture(imergMapTex) : vec4(0.0);
+
+    // IMERG Precipitation Rate overlay transparency mask
+    const imergIntensity = imergSampleRaw.r.add(imergSampleRaw.g).add(imergSampleRaw.b);
+    const imergAlpha = imergSampleRaw.a.mul(smoothstep(0.01, 0.08, imergIntensity));
+    const imergSample = vec4(imergSampleRaw.rgb, imergAlpha);
+
+    // Select layer: 2.0 = IMERG Precipitation Rate, 1.0 = MODIS NDVI, 0.0 = Sea Surface Temp Anomalies
+    const gibsSample = gibsLayerUniform.greaterThan(1.5).select(
+        imergSample,
+        gibsLayerUniform.greaterThan(0.5).select(ndviSample, sstSample)
+    );
     const gibsFactor = gibsEnabledUniform.mul(gibsOpacityUniform).mul(gibsSample.a);
+
+    group.userData.updateGibsDate = async (dateStr: string) => {
+        if (!imergMapTex) return;
+        const cleanDate = dateStr.trim();
+        const newUrl = `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=IMERG_Precipitation_Rate&FORMAT=image/png&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=${cleanDate}`;
+        try {
+            const newTex = await loader.loadAsync(newUrl);
+            newTex.colorSpace = THREE.SRGBColorSpace;
+            newTex.anisotropy = maxAnisotropy;
+            imergMapTex.image = newTex.image;
+            imergMapTex.needsUpdate = true;
+        } catch (e) {
+            console.warn("Could not load GIBS IMERG data for date:", cleanDate, e);
+        }
+    };
 
     const displacementScaleUniform = uniform(CONSTANTS.GUI.EARTH.DISPLACEMENT_SCALE || 0.02);
     const landRoughnessUniform = uniform(CONSTANTS.GUI.EARTH.LAND_ROUGHNESS || 0.8);
@@ -505,29 +544,35 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // the maximum visible v is roughly sqrt(1 - (10/10.2)^2) ≈ 0.197
     const v = dot(dirToFrag, worldNormal).clamp(0.0, 1.0);
     
-    // Scale v so that it reaches near 1.0 at the point where the earth occludes it.
-    // That way the halo is bright right next to the earth, and softly fades to 0 at the outer edge.
-    const normalizedV = v.mul(5.0);
-    const opticalDepth = pow(normalizedV.clamp(0.00001, 1.0), 2.5);
-    
-    // Sun lighting calculations for atmospheric scattering
-    const sunDotAtmos = dot(worldNormal, sunDir);
-    const cosTheta = dot(dirToFrag, sunDir);
-    
     // Configurable parameters via UserData
     const rayleighColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.RAYLEIGH_COLOR));
     const rayleighIntensityUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.RAYLEIGH_INTENSITY);
     const mieColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.MIE_COLOR));
     const airglowColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.AIRGLOW_COLOR));
+    const airglowSecondaryColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.AIRGLOW_SECONDARY_COLOR || 0x3377ff));
     const atmosModeUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.MODE === 'Scattering' ? 0.0 : 1.0);
     const atmosDensityUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.DENSITY);
+    const outerGlowPowerUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.OUTER_GLOW_POWER || 2.5);
+    const outerGlowIntensityUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.OUTER_GLOW_INTENSITY || 1.0);
     
     group.userData.rayleighColor = rayleighColorUniform;
     group.userData.rayleighIntensity = rayleighIntensityUniform;
     group.userData.mieColor = mieColorUniform;
     group.userData.airglowColor = airglowColorUniform;
+    group.userData.airglowSecondaryColor = airglowSecondaryColorUniform;
     group.userData.atmosMode = atmosModeUniform;
     group.userData.atmosDensity = atmosDensityUniform;
+    group.userData.outerGlowPower = outerGlowPowerUniform;
+    group.userData.outerGlowIntensity = outerGlowIntensityUniform;
+
+    // Sun lighting calculations for atmospheric scattering
+    const sunDotAtmos = dot(worldNormal, sunDir);
+    const cosTheta = dot(dirToFrag, sunDir);
+
+    // Scale v so that it reaches near 1.0 at the point where the earth occludes it.
+    // That way the halo is bright right next to the earth, and softly fades to 0 at the outer edge.
+    const normalizedV = v.mul(5.0);
+    const opticalDepth = pow(normalizedV.clamp(0.00001, 1.0), outerGlowPowerUniform).mul(outerGlowIntensityUniform);
 
     // --- RAYLEIGH SCATTERING ---
     // Phase Function: 3 / (16 * PI) * (1 + cosTheta^2)
@@ -553,11 +598,11 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // v goes from 0 at R=10.2 to ~0.197 at R=10
     // Narrow green band at top (low v):
     const greenBand = smoothstep(0.06, 0.02, v).mul(smoothstep(0.0, 0.04, v));
-    // Faint blue band lower down (higher v):
+    // Faint secondary band lower down (higher v):
     const blueBand = smoothstep(0.15, 0.05, v).mul(smoothstep(0.03, 0.1, v));
     
     const airglowLight = airglowColorUniform.mul(greenBand).mul(4.0)
-        .add(vec3(0.2, 0.3, 0.6).mul(blueBand).mul(1.5))
+        .add(airglowSecondaryColorUniform.mul(blueBand).mul(1.5))
         .mul(intensityPhase);
         
     const finalScattering = scatteredLight.mul(opticalDepth);

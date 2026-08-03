@@ -373,6 +373,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     mie: earth.userData.mieColor.value.getHex(),
     twilight: earth.userData.twilightColor.value.getHex(),
     airglow: earth.userData.airglowColor.value.getHex(),
+    airglowSecondary: earth.userData.airglowSecondaryColor ? earth.userData.airglowSecondaryColor.value.getHex() : 0x3377ff,
   };
   atmosFolder
     .addColor(atmosColors, "rayleigh")
@@ -394,10 +395,18 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     });
   atmosFolder
     .addColor(atmosColors, "airglow")
-    .name("Airglow Color")
+    .name("Airglow Primary Color")
     .onChange((c: number) => {
       earth.userData.airglowColor.value.setHex(c);
     });
+  if (earth.userData.airglowSecondaryColor) {
+    atmosFolder
+      .addColor(atmosColors, "airglowSecondary")
+      .name("Airglow Secondary Color")
+      .onChange((c: number) => {
+        earth.userData.airglowSecondaryColor.value.setHex(c);
+      });
+  }
   atmosFolder
     .add(earth.userData.atmosDensity, "value", 0.1, 100.0)
     .name("Density");
@@ -405,6 +414,18 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     .add(earth.userData.rayleighIntensity, "value", 0.0, 5.0)
     .step(0.1)
     .name("Rayleigh Intensity");
+  if (earth.userData.outerGlowPower) {
+    atmosFolder
+      .add(earth.userData.outerGlowPower, "value", 0.5, 8.0)
+      .step(0.1)
+      .name("Outer Line Glow Falloff");
+  }
+  if (earth.userData.outerGlowIntensity) {
+    atmosFolder
+      .add(earth.userData.outerGlowIntensity, "value", 0.0, 5.0)
+      .step(0.1)
+      .name("Outer Line Glow Brightness");
+  }
   atmosFolder
     .add(earth.userData.darkSideBrightness, "value", 0.0, 0.5)
     .step(0.001)
@@ -558,16 +579,33 @@ export function buildGui(gui: GUI, options: GuiOptions) {
 
   if (earth.userData.gibsEnabled && earth.userData.gibsOpacity) {
     const gibsFolder = mapGroup.addFolder("GIBS Data Overlays");
+    const getLayerName = (val: number) => {
+      if (val > 1.5) return "IMERG Precipitation Rate";
+      if (val > 0.5) return "MODIS Terra NDVI 8-Day";
+      return "Sea Surface Temp Anomalies";
+    };
+
     const gibsState = {
       enabled: earth.userData.gibsEnabled.value > 0.5,
-      layer: earth.userData.gibsLayer.value > 0.5 ? "MODIS Terra NDVI 8-Day" : "Sea Surface Temp Anomalies"
+      layer: getLayerName(earth.userData.gibsLayer.value),
+      date: "2026-07-27",
     };
     
     gibsFolder
-      .add(gibsState, "layer", ["Sea Surface Temp Anomalies", "MODIS Terra NDVI 8-Day"])
+      .add(gibsState, "layer", [
+        "Sea Surface Temp Anomalies",
+        "MODIS Terra NDVI 8-Day",
+        "IMERG Precipitation Rate"
+      ])
       .name("Layer")
       .onChange((v: string) => {
-        earth.userData.gibsLayer.value = v === "MODIS Terra NDVI 8-Day" ? 1.0 : 0.0;
+        if (v === "IMERG Precipitation Rate") {
+          earth.userData.gibsLayer.value = 2.0;
+        } else if (v === "MODIS Terra NDVI 8-Day") {
+          earth.userData.gibsLayer.value = 1.0;
+        } else {
+          earth.userData.gibsLayer.value = 0.0;
+        }
       });
 
     gibsFolder
@@ -581,6 +619,15 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       .add(earth.userData.gibsOpacity, "value", 0.0, 1.0)
       .step(0.05)
       .name("Opacity");
+
+    if (earth.userData.updateGibsDate) {
+      gibsFolder
+        .add(gibsState, "date")
+        .name("GIBS Date (YYYY-MM-DD)")
+        .onFinishChange((d: string) => {
+          earth.userData.updateGibsDate(d);
+        });
+    }
   }
 
   if (satelliteSettings) {

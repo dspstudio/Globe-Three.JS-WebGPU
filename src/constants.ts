@@ -86,6 +86,7 @@ export const CONSTANTS = {
     BATHYMETRY: "./gebco_08_rev_bath_5400x2700.png",
     SST_ANOMALIES: "./GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies.png",
     MODIS_NDVI: "./MODIS_Terra_NDVI_8Day.png",
+    IMERG_PRECIPITATION: "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=IMERG_Precipitation_Rate&FORMAT=image/png&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=2026-07-27",
     STARS: use2k ? "./starmap_2k.jpg" : "./starmap_8k.jpg",
     MOON_ALBEDO: use2k ? "./2k_moon.jpg" : "./8k_moon.jpg",
     MOON_DISPLACEMENT: use2k ? "./ldem_4.png" : "./ldem_4.png",
@@ -156,6 +157,9 @@ export const CONSTANTS = {
       MIE_COLOR: 0x0d374a,
       TWILIGHT_COLOR: 0xff5533,
       AIRGLOW_COLOR: 0x44ff55,
+      AIRGLOW_SECONDARY_COLOR: 0x3377ff,
+      OUTER_GLOW_POWER: 2.5,
+      OUTER_GLOW_INTENSITY: 1.0,
     },
     CLOUD_SHADOWS: {
       DISTANCE: 0.08,
