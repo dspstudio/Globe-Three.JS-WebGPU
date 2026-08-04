@@ -194,6 +194,12 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       .step(0.02)
       .name("Vegetation Boost (NDVI)");
   }
+  if (earth.userData.laiEnhance) {
+    terrainFolder
+      .add(earth.userData.laiEnhance, "value", 0.0, 1.0)
+      .step(0.02)
+      .name("Canopy Density Boost (LAI)");
+  }
   terrainFolder
     .add(earth.userData.terrainShadowIntensity, "value", 0.0, 5.0)
     .name("Self-Shadow Intensity");

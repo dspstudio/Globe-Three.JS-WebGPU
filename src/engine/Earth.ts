@@ -48,7 +48,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     // Load textures
     let imergMapTex: THREE.Texture | null = null;
-    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, bumpMapTex, sstMapTex, ndviMapTex, bathymetryMapTex] = await Promise.all([
+    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, bumpMapTex, sstMapTex, ndviMapTex, bathymetryMapTex, laiMapTex] = await Promise.all([
         loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
         loader.loadAsync(CONSTANTS.TEXTURES.SPECULAR),
         loader.loadAsync(CONSTANTS.TEXTURES.NORMAL),
@@ -57,7 +57,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
         loader.loadAsync(CONSTANTS.TEXTURES.BUMP),
         loader.loadAsync(CONSTANTS.TEXTURES.SST_ANOMALIES).catch(() => null),
         loader.loadAsync(CONSTANTS.TEXTURES.MODIS_NDVI).catch(() => null),
-        loader.loadAsync(CONSTANTS.TEXTURES.BATHYMETRY).catch(() => null)
+        loader.loadAsync(CONSTANTS.TEXTURES.BATHYMETRY).catch(() => null),
+        loader.loadAsync(CONSTANTS.TEXTURES.MODIS_LAI).catch(() => null)
     ]);
 
     imergMapTex = await loader.loadAsync(CONSTANTS.TEXTURES.IMERG_PRECIPITATION).catch(async () => {
@@ -76,6 +77,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     if (ndviMapTex) {
         ndviMapTex.colorSpace = THREE.SRGBColorSpace;
         ndviMapTex.anisotropy = maxAnisotropy;
+    }
+    if (laiMapTex) {
+        laiMapTex.colorSpace = THREE.SRGBColorSpace;
+        laiMapTex.anisotropy = maxAnisotropy;
     }
     if (imergMapTex) {
         imergMapTex.colorSpace = THREE.SRGBColorSpace;
@@ -276,16 +281,23 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     // --- Optical Ocean & Depth Gradient Shading ---
     const ndviEnhanceUniform = uniform(CONSTANTS.GUI.EARTH.NDVI_ENHANCE_STRENGTH || 0.3);
+    const laiEnhanceUniform = uniform(CONSTANTS.GUI.EARTH.LAI_ENHANCE_STRENGTH || 0.3);
     group.userData.ndviEnhance = ndviEnhanceUniform;
+    group.userData.laiEnhance = laiEnhanceUniform;
 
     const baseDayTex = texture(colorMapTex);
     const ndviSample = ndviMapTex ? texture(ndviMapTex) : vec4(0.0);
+    const laiSample = laiMapTex ? texture(laiMapTex) : vec4(0.0);
 
-    // Vegetation density from MODIS NDVI map (higher alpha/greenness on land = dense canopy)
-    const vegFactor = ndviSample.a.mul(float(1.0).sub(spec));
+    // Vegetation density from MODIS NDVI (greenness index) & Leaf Area Index (LAI canopy index)
+    const ndviVal = ndviSample.a;
+    const laiVal = laiSample.r.add(laiSample.g).add(laiSample.b).div(3.0);
+    
+    // Land-masked combined vegetation factor
+    const vegFactor = ndviVal.mul(ndviEnhanceUniform).add(laiVal.mul(laiEnhanceUniform)).clamp(0.0, 1.0).mul(float(1.0).sub(spec));
     // Richer foliage tinting: boost lush green channel & contrast for vibrant vegetation
     const vegBoostColor = baseDayTex.mul(vec3(0.82, 1.25, 0.88));
-    const landDayTex = mix(baseDayTex, vegBoostColor, vegFactor.mul(ndviEnhanceUniform));
+    const landDayTex = mix(baseDayTex, vegBoostColor, vegFactor);
 
     const bathymetrySample = bathymetryMapTex ? texture(bathymetryMapTex) : texture(bumpMapTex);
     

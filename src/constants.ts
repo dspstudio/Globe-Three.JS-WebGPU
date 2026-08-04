@@ -86,6 +86,9 @@ export const CONSTANTS = {
     BATHYMETRY: "./gebco_08_rev_bath_5400x2700.png",
     SST_ANOMALIES: "./GHRSST_L4_MUR_Sea_Surface_Temperature_Anomalies.png",
     MODIS_NDVI: "./MODIS_Terra_NDVI_8Day.png",
+    MODIS_LAI: use2k
+      ? "./images/2k_MODIS_Terra_Leaf_Area_Index_8Day.png"
+      : "./images/8k_MODIS_Terra_Leaf_Area_Index_8Day.png",
     IMERG_PRECIPITATION: "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=IMERG_Precipitation_Rate&FORMAT=image/png&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=2026-07-27",
     STARS: use2k ? "./starmap_2k.jpg" : "./starmap_8k.jpg",
     MOON_ALBEDO: use2k ? "./2k_moon.jpg" : "./8k_moon.jpg",
@@ -195,6 +198,7 @@ export const CONSTANTS = {
       DISPLACEMENT_SCALE: 0.02,
       LAND_ROUGHNESS: 1,
       NDVI_ENHANCE_STRENGTH: 0.3,
+      LAI_ENHANCE_STRENGTH: 0.3,
       GIBS_ENABLED: false,
       GIBS_LAYER: "Sea Surface Temp Anomalies",
       GIBS_OPACITY: 0.8,
