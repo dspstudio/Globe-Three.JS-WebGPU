@@ -48,7 +48,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     // Load textures
     let imergMapTex: THREE.Texture | null = null;
-    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, bumpMapTex, sstMapTex, ndviMapTex, bathymetryMapTex, laiMapTex] = await Promise.all([
+    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, bumpMapTex, sstMapTex, ndviMapTex, bathymetryMapTex, laiMapTex, albedoMapTex] = await Promise.all([
         loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
         loader.loadAsync(CONSTANTS.TEXTURES.SPECULAR),
         loader.loadAsync(CONSTANTS.TEXTURES.NORMAL),
@@ -58,7 +58,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
         loader.loadAsync(CONSTANTS.TEXTURES.SST_ANOMALIES).catch(() => null),
         loader.loadAsync(CONSTANTS.TEXTURES.MODIS_NDVI).catch(() => null),
         loader.loadAsync(CONSTANTS.TEXTURES.BATHYMETRY).catch(() => null),
-        loader.loadAsync(CONSTANTS.TEXTURES.MODIS_LAI).catch(() => null)
+        loader.loadAsync(CONSTANTS.TEXTURES.MODIS_LAI).catch(() => null),
+        loader.loadAsync(CONSTANTS.TEXTURES.MODIS_ALBEDO).catch(() => null)
     ]);
 
     imergMapTex = await loader.loadAsync(CONSTANTS.TEXTURES.IMERG_PRECIPITATION).catch(async () => {
@@ -81,6 +82,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     if (laiMapTex) {
         laiMapTex.colorSpace = THREE.SRGBColorSpace;
         laiMapTex.anisotropy = maxAnisotropy;
+    }
+    if (albedoMapTex) {
+        albedoMapTex.colorSpace = THREE.SRGBColorSpace;
+        albedoMapTex.anisotropy = maxAnisotropy;
     }
     if (imergMapTex) {
         imergMapTex.colorSpace = THREE.SRGBColorSpace;
@@ -444,8 +449,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     const displacementScaleUniform = uniform(CONSTANTS.GUI.EARTH.DISPLACEMENT_SCALE || 0.02);
     const landRoughnessUniform = uniform(CONSTANTS.GUI.EARTH.LAND_ROUGHNESS || 0.8);
+    const albedoPbrStrengthUniform = uniform(CONSTANTS.GUI.EARTH.ALBEDO_PBR_MODULATION || 0.35);
     group.userData.displacementScale = displacementScaleUniform;
     group.userData.landRoughness = landRoughnessUniform;
+    group.userData.albedoPbrStrength = albedoPbrStrengthUniform;
 
     // Apply vertex displacement map from bump_map texture
     const bumpVal = texture(bumpMapTex).r;
@@ -460,8 +467,15 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     })() as any;
     
     // Specular map for water reflections: white spec = water, black spec = land
-    // Land roughness is modulated by bump_map elevation and NDVI vegetation density
-    const landRoughnessMap = mix(landRoughnessUniform.mul(0.6), landRoughnessUniform, bumpVal).add(vegFactor.mul(ndviEnhanceUniform).mul(0.15)).clamp(0.0, 1.0);
+    // Land roughness is modulated by bump_map elevation, vegetation density, and MODIS albedo brightness
+    // High albedo = dry sand/ice glare (lower roughness), Low albedo = high absorption vegetation canopy (higher roughness)
+    const albedoSample = albedoMapTex ? texture(albedoMapTex) : vec4(0.5);
+    const albedoVal = albedoSample.r.add(albedoSample.g).add(albedoSample.b).div(3.0);
+    const albedoRoughnessShift = float(0.5).sub(albedoVal).mul(albedoPbrStrengthUniform);
+    const landRoughnessMap = mix(landRoughnessUniform.mul(0.6), landRoughnessUniform, bumpVal)
+        .add(vegFactor.mul(ndviEnhanceUniform).mul(0.15))
+        .add(albedoRoughnessShift)
+        .clamp(0.05, 1.0);
     const baseRoughness = mix(landRoughnessMap, waterRoughnessUniform, spec);
     const baseMetalness = mix(0.0, waterMetalnessUniform, spec);
     

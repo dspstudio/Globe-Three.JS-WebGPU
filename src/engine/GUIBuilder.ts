@@ -200,6 +200,12 @@ export function buildGui(gui: GUI, options: GuiOptions) {
       .step(0.02)
       .name("Canopy Density Boost (LAI)");
   }
+  if (earth.userData.albedoPbrStrength) {
+    terrainFolder
+      .add(earth.userData.albedoPbrStrength, "value", 0.0, 1.0)
+      .step(0.02)
+      .name("Albedo PBR Mod");
+  }
   terrainFolder
     .add(earth.userData.terrainShadowIntensity, "value", 0.0, 5.0)
     .name("Self-Shadow Intensity");
