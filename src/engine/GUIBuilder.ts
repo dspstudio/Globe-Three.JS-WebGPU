@@ -1,6 +1,6 @@
 import GUI from "lil-gui";
 import * as THREE from "three";
-import { CONSTANTS } from "../constants";
+import { CONSTANTS, getTwoDaysAgoDate } from "../constants";
 import { CountryBorders } from "./CountryBorders";
 import { CountryLabels } from "./CountryLabels";
 import { Graticule } from "./Graticule";
@@ -592,6 +592,7 @@ export function buildGui(gui: GUI, options: GuiOptions) {
   if (earth.userData.gibsEnabled && earth.userData.gibsOpacity) {
     const gibsFolder = mapGroup.addFolder("GIBS Data Overlays");
     const getLayerName = (val: number) => {
+      if (val > 2.5) return "VIIRS True Color (Daily)";
       if (val > 1.5) return "IMERG Precipitation Rate";
       if (val > 0.5) return "MODIS Terra NDVI 8-Day";
       return "Sea Surface Temp Anomalies";
@@ -600,18 +601,21 @@ export function buildGui(gui: GUI, options: GuiOptions) {
     const gibsState = {
       enabled: earth.userData.gibsEnabled.value > 0.5,
       layer: getLayerName(earth.userData.gibsLayer.value),
-      date: "2026-07-27",
+      date: CONSTANTS.GUI.EARTH.GIBS_DATE || getTwoDaysAgoDate(),
     };
     
     gibsFolder
       .add(gibsState, "layer", [
+        "VIIRS True Color (Daily)",
         "Sea Surface Temp Anomalies",
         "MODIS Terra NDVI 8-Day",
         "IMERG Precipitation Rate"
       ])
       .name("Layer")
       .onChange((v: string) => {
-        if (v === "IMERG Precipitation Rate") {
+        if (v === "VIIRS True Color (Daily)") {
+          earth.userData.gibsLayer.value = 3.0;
+        } else if (v === "IMERG Precipitation Rate") {
           earth.userData.gibsLayer.value = 2.0;
         } else if (v === "MODIS Terra NDVI 8-Day") {
           earth.userData.gibsLayer.value = 1.0;

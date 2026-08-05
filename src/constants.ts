@@ -1,5 +1,10 @@
 import { LocationInfo } from "./types";
 
+export const getTwoDaysAgoDate = (): string => {
+  const d = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  return d.toISOString().split("T")[0];
+};
+
 // Check device capability
 export const isMobileOrTablet = () => {
   if (typeof window === "undefined") return false;
@@ -90,7 +95,8 @@ export const CONSTANTS = {
       ? "./images/2k_MODIS_Terra_Leaf_Area_Index_8Day.png"
       : "./images/8k_MODIS_Terra_Leaf_Area_Index_8Day.png",
     MODIS_ALBEDO: "./8k_MODIS_Combined_L3_Black_Sky_Albedo_Daily.png",
-    IMERG_PRECIPITATION: "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=IMERG_Precipitation_Rate&FORMAT=image/png&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=2026-07-27",
+    IMERG_PRECIPITATION: `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=IMERG_Precipitation_Rate&FORMAT=image/png&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=${getTwoDaysAgoDate()}`,
+    VIIRS_TRUE_COLOR: `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=VIIRS_SNPP_CorrectedReflectance_TrueColor&FORMAT=image/jpeg&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=${getTwoDaysAgoDate()}`,
     STARS: use2k ? "./starmap_2k.jpg" : "./starmap_8k.jpg",
     MOON_ALBEDO: use2k ? "./2k_moon.jpg" : "./8k_moon.jpg",
     MOON_DISPLACEMENT: use2k ? "./ldem_4.png" : "./ldem_4.png",
@@ -204,6 +210,7 @@ export const CONSTANTS = {
       GIBS_ENABLED: false,
       GIBS_LAYER: "Sea Surface Temp Anomalies",
       GIBS_OPACITY: 0.8,
+      GIBS_DATE: getTwoDaysAgoDate(),
       TERRAIN_SHADOW_INTENSITY: 1.0,
       TERRAIN_SHADOW_OFFSET: 0.002,
       TRUE_INCLINATION: false,

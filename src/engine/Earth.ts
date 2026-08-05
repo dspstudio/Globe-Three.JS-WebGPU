@@ -48,6 +48,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     // Load textures
     let imergMapTex: THREE.Texture | null = null;
+    let viirsTrueColorMapTex: THREE.Texture | null = null;
     const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, bumpMapTex, sstMapTex, ndviMapTex, bathymetryMapTex, laiMapTex, albedoMapTex] = await Promise.all([
         loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
         loader.loadAsync(CONSTANTS.TEXTURES.SPECULAR),
@@ -61,6 +62,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
         loader.loadAsync(CONSTANTS.TEXTURES.MODIS_LAI).catch(() => null),
         loader.loadAsync(CONSTANTS.TEXTURES.MODIS_ALBEDO).catch(() => null)
     ]);
+
+    viirsTrueColorMapTex = await loader.loadAsync(CONSTANTS.TEXTURES.VIIRS_TRUE_COLOR).catch(() => null);
 
     imergMapTex = await loader.loadAsync(CONSTANTS.TEXTURES.IMERG_PRECIPITATION).catch(async () => {
         // Fallback to recent date if requested date returns no tile data
@@ -90,6 +93,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     if (imergMapTex) {
         imergMapTex.colorSpace = THREE.SRGBColorSpace;
         imergMapTex.anisotropy = maxAnisotropy;
+    }
+    if (viirsTrueColorMapTex) {
+        viirsTrueColorMapTex.colorSpace = THREE.SRGBColorSpace;
+        viirsTrueColorMapTex.anisotropy = maxAnisotropy;
     }
     if (bathymetryMapTex) {
         bathymetryMapTex.colorSpace = THREE.SRGBColorSpace;
@@ -410,7 +417,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // SST / GIBS Data Overlay
     const gibsEnabledUniform = uniform(CONSTANTS.GUI.EARTH.GIBS_ENABLED ? 1.0 : 0.0);
     const gibsOpacityUniform = uniform(CONSTANTS.GUI.EARTH.GIBS_OPACITY || 0.8);
-    const initialGibsLayer = CONSTANTS.GUI.EARTH.GIBS_LAYER === "IMERG Precipitation Rate" ? 2.0 :
+    const initialGibsLayer = CONSTANTS.GUI.EARTH.GIBS_LAYER === "VIIRS True Color (Daily)" ? 3.0 :
+                             CONSTANTS.GUI.EARTH.GIBS_LAYER === "IMERG Precipitation Rate" ? 2.0 :
                              CONSTANTS.GUI.EARTH.GIBS_LAYER === "MODIS Terra NDVI 8-Day" ? 1.0 : 0.0;
     const gibsLayerUniform = uniform(initialGibsLayer);
     group.userData.gibsEnabled = gibsEnabledUniform;
@@ -419,31 +427,45 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     const sstSample = sstMapTex ? texture(sstMapTex) : vec4(0.0);
     const imergSampleRaw = imergMapTex ? texture(imergMapTex) : vec4(0.0);
+    const viirsSample = viirsTrueColorMapTex ? texture(viirsTrueColorMapTex) : vec4(0.0);
 
     // IMERG Precipitation Rate overlay transparency mask
     const imergIntensity = imergSampleRaw.r.add(imergSampleRaw.g).add(imergSampleRaw.b);
     const imergAlpha = imergSampleRaw.a.mul(smoothstep(0.01, 0.08, imergIntensity));
     const imergSample = vec4(imergSampleRaw.rgb, imergAlpha);
 
-    // Select layer: 2.0 = IMERG Precipitation Rate, 1.0 = MODIS NDVI, 0.0 = Sea Surface Temp Anomalies
-    const gibsSample = gibsLayerUniform.greaterThan(1.5).select(
-        imergSample,
-        gibsLayerUniform.greaterThan(0.5).select(ndviSample, sstSample)
+    // Select layer: 3.0 = VIIRS True Color (Daily), 2.0 = IMERG Precipitation Rate, 1.0 = MODIS NDVI, 0.0 = Sea Surface Temp Anomalies
+    const gibsSample = gibsLayerUniform.greaterThan(2.5).select(
+        viirsSample,
+        gibsLayerUniform.greaterThan(1.5).select(
+            imergSample,
+            gibsLayerUniform.greaterThan(0.5).select(ndviSample, sstSample)
+        )
     );
     const gibsFactor = gibsEnabledUniform.mul(gibsOpacityUniform).mul(gibsSample.a);
 
     group.userData.updateGibsDate = async (dateStr: string) => {
-        if (!imergMapTex) return;
         const cleanDate = dateStr.trim();
-        const newUrl = `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=IMERG_Precipitation_Rate&FORMAT=image/png&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=${cleanDate}`;
+        const viirsUrl = `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=VIIRS_SNPP_CorrectedReflectance_TrueColor&FORMAT=image/jpeg&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=${cleanDate}`;
+        const imergUrl = `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=IMERG_Precipitation_Rate&FORMAT=image/png&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=${cleanDate}`;
+
         try {
-            const newTex = await loader.loadAsync(newUrl);
-            newTex.colorSpace = THREE.SRGBColorSpace;
-            newTex.anisotropy = maxAnisotropy;
-            imergMapTex.image = newTex.image;
-            imergMapTex.needsUpdate = true;
+            if (viirsTrueColorMapTex) {
+                const newTex = await loader.loadAsync(viirsUrl);
+                newTex.colorSpace = THREE.SRGBColorSpace;
+                newTex.anisotropy = maxAnisotropy;
+                viirsTrueColorMapTex.image = newTex.image;
+                viirsTrueColorMapTex.needsUpdate = true;
+            }
+            if (imergMapTex) {
+                const newTex = await loader.loadAsync(imergUrl);
+                newTex.colorSpace = THREE.SRGBColorSpace;
+                newTex.anisotropy = maxAnisotropy;
+                imergMapTex.image = newTex.image;
+                imergMapTex.needsUpdate = true;
+            }
         } catch (e) {
-            console.warn("Could not load GIBS IMERG data for date:", cleanDate, e);
+            console.warn("Could not load GIBS data for date:", cleanDate, e);
         }
     };
 
