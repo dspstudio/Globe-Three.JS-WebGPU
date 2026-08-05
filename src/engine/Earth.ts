@@ -412,10 +412,16 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // Smoothly blend wave normal for ocean regions
     const oceanNormWorld = mix(normWorld, waveNormWorld, spec);
 
+    // Bathymetry Specular Masking: dampens specular reflections near coasts and boosts deep ocean glint
+    // depthFactor is ~0.0 in deep ocean, ~1.0 in shallow coastal waters
+    const deepOceanGlintBoost = float(1.0).add(float(1.0).sub(depthFactor).mul(0.5));
+    const coastalSpecDampen = float(1.0).sub(smoothstep(float(0.1), float(0.8), depthFactor).mul(0.7));
+    const bathymetrySpecMask = deepOceanGlintBoost.mul(coastalSpecDampen);
+
     // Fresnel reflection & View direction calculations
     const viewDirWorld = normalize(cameraPosition.sub(positionWorld));
     const cosViewWave = max(float(0.0), dot(oceanNormWorld, viewDirWorld));
-    const fresnelVal = pow(float(1.0).sub(cosViewWave), fresnelExponentUniform).mul(fresnelStrengthUniform).mul(spec);
+    const fresnelVal = pow(float(1.0).sub(cosViewWave), fresnelExponentUniform).mul(fresnelStrengthUniform).mul(spec).mul(bathymetrySpecMask);
     const fresnelGlow = fresnelColorUniform.mul(fresnelVal);
 
     // Subsurface Scattering (sunlight scattering through ocean depth)
@@ -427,10 +433,10 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const halfDirWorld = normalize(sunDir.add(viewDirWorld));
     const NdotH = max(float(0.0), dot(oceanNormWorld, halfDirWorld));
     
-    // Direct physical specular sun reflection (sharp glint) independent of sparkle noise
-    const sunGlint = pow(NdotH, float(120.0)).mul(sunGlintPowerUniform).mul(spec);
+    // Direct physical specular sun reflection (sharp glint) independent of sparkle noise (modulated by bathymetry)
+    const sunGlint = pow(NdotH, float(120.0)).mul(sunGlintPowerUniform).mul(spec).mul(bathymetrySpecMask);
     // Broader wave micro-facet sparkle
-    const waveSparkle = pow(NdotH, float(20.0)).mul(0.4).mul(spec).mul(waveSparkleUniform);
+    const waveSparkle = pow(NdotH, float(20.0)).mul(0.4).mul(spec).mul(waveSparkleUniform).mul(bathymetrySpecMask);
     const waveSparkleGlow = vec3(1.0, 0.95, 0.85).mul(sunGlint).add(vec3(0.5, 0.75, 1.0).mul(waveSparkle)).mul(sunLight).mul(wavesEnabledUniform);
 
     // Wave Crest Foam (foam along wave peaks on open ocean)
@@ -531,7 +537,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     earthMaterial.roughnessNode = mix(baseRoughness, float(1.0), moonEclipseShadow);
     earthMaterial.metalnessNode = mix(baseMetalness, float(0.0), moonEclipseShadow);
     earthMaterial.specularColorNode = mix(vec3(1.0), vec3(0.0), moonEclipseShadow);
-    earthMaterial.specularIntensityNode = mix(float(1.0), fresnelStrengthUniform, spec).mul(float(1.0).sub(moonEclipseShadow));
+    const waterSpecIntensity = fresnelStrengthUniform.mul(bathymetrySpecMask);
+    earthMaterial.specularIntensityNode = mix(float(1.0), waterSpecIntensity, spec).mul(float(1.0).sub(moonEclipseShadow));
     earthMaterial.iorNode = mix(float(1.5), waterIorUniform, spec).mul(float(1.0).sub(moonEclipseShadow));
     
     const bumpScaleUniform = uniform(vec2(CONSTANTS.GUI.EARTH.BUMP_SCALE, CONSTANTS.GUI.EARTH.BUMP_SCALE));
