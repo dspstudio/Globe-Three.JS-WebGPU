@@ -441,7 +441,19 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     // Wave Crest Foam (foam along wave peaks on open ocean)
     const waveCrestFoam = smoothstep(0.62, 0.82, hWave0).mul(foamIntensityUniform).mul(spec).mul(0.6).mul(wavesEnabledUniform);
-    const oceanSurfaceWithWaves = mix(oceanSurfaceTex, vec3(0.92, 0.96, 1.0), waveCrestFoam);
+
+    // Procedural Shore Foam Effect (Depth-Buffer Comparison):
+    // Compare ocean surface height (hWave0) against coastal bathymetry depth (depthFactor)
+    // When ocean surface height is near coastal depth in shallow waters, dynamically increase white pixel intensity to represent foam
+    const shoreDepthDiff = abs(hWave0.sub(depthFactor.mul(0.7)));
+    const dynamicShoreFoam = smoothstep(float(0.35), float(0.02), shoreDepthDiff)
+        .mul(smoothstep(float(0.20), float(0.85), depthFactor))
+        .mul(spec)
+        .mul(foamIntensityUniform)
+        .mul(1.4);
+
+    const totalFoam = waveCrestFoam.add(dynamicShoreFoam).clamp(0.0, 1.0);
+    const oceanSurfaceWithWaves = mix(oceanSurfaceTex, vec3(0.95, 0.98, 1.0), totalFoam);
 
     // Coastal Shelf Foam (originates at continent shoreline and fades outward into ocean)
     const foamMin = foamThresholdUniform.sub(coastalFadeDistanceUniform).clamp(0.0, 1.0);
