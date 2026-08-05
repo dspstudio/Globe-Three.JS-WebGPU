@@ -294,19 +294,47 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // --- Optical Ocean & Depth Gradient Shading ---
     const ndviEnhanceUniform = uniform(CONSTANTS.GUI.EARTH.NDVI_ENHANCE_STRENGTH || 0.3);
     const laiEnhanceUniform = uniform(CONSTANTS.GUI.EARTH.LAI_ENHANCE_STRENGTH || 0.3);
+    const snowMinRgbUniform = uniform(CONSTANTS.GUI.EARTH.SNOW_MASK_MIN_RGB ?? 0.35);
+    const snowMaxRgbUniform = uniform(CONSTANTS.GUI.EARTH.SNOW_MASK_MAX_RGB ?? 0.52);
+    const snowMinAlbedoUniform = uniform(CONSTANTS.GUI.EARTH.SNOW_MASK_MIN_ALBEDO ?? 0.40);
+    const snowMaxAlbedoUniform = uniform(CONSTANTS.GUI.EARTH.SNOW_MASK_MAX_ALBEDO ?? 0.60);
+    const greenDomThreshUniform = uniform(CONSTANTS.GUI.EARTH.GREEN_DOMINANCE_THRESHOLD ?? 0.03);
+
     group.userData.ndviEnhance = ndviEnhanceUniform;
     group.userData.laiEnhance = laiEnhanceUniform;
+    group.userData.snowMinRgb = snowMinRgbUniform;
+    group.userData.snowMaxRgb = snowMaxRgbUniform;
+    group.userData.snowMinAlbedo = snowMinAlbedoUniform;
+    group.userData.snowMaxAlbedo = snowMaxAlbedoUniform;
+    group.userData.greenDomThresh = greenDomThreshUniform;
 
     const baseDayTex = texture(colorMapTex);
     const ndviSample = ndviMapTex ? texture(ndviMapTex) : vec4(0.0);
     const laiSample = laiMapTex ? texture(laiMapTex) : vec4(0.0);
+    const albedoSample = albedoMapTex ? texture(albedoMapTex) : vec4(0.5);
 
     // Vegetation density from MODIS NDVI (greenness index) & Leaf Area Index (LAI canopy index)
     const ndviVal = ndviSample.a;
     const laiVal = laiSample.r.add(laiSample.g).add(laiSample.b).div(3.0);
+    const albedoVal = albedoSample.r.add(albedoSample.g).add(albedoSample.b).div(3.0);
     
-    // Land-masked combined vegetation factor
-    const vegFactor = ndviVal.mul(ndviEnhanceUniform).add(laiVal.mul(laiEnhanceUniform)).clamp(0.0, 1.0).mul(float(1.0).sub(spec));
+    // Snow/ice mask based on surface albedo brightness & color neutrality
+    const minRGB = min(baseDayTex.r, min(baseDayTex.g, baseDayTex.b));
+    const snowBrightnessFactor = smoothstep(snowMinRgbUniform, snowMaxRgbUniform, minRGB);
+    const snowAlbedoFactor = smoothstep(snowMinAlbedoUniform, snowMaxAlbedoUniform, albedoVal);
+    const snowFactor = max(snowBrightnessFactor, snowAlbedoFactor);
+    const nonSnowMask = float(1.0).sub(snowFactor);
+
+    // Green dominance check: vegetation must have green channel exceeding red channel
+    const greenDom = smoothstep(float(0.0), greenDomThreshUniform, baseDayTex.g.sub(baseDayTex.r));
+
+    // Land-masked, non-snow-masked, & green-dominant combined vegetation factor
+    const vegFactor = ndviVal.mul(ndviEnhanceUniform)
+        .add(laiVal.mul(laiEnhanceUniform))
+        .clamp(0.0, 1.0)
+        .mul(float(1.0).sub(spec))
+        .mul(nonSnowMask)
+        .mul(greenDom);
     // Richer foliage tinting: boost lush green channel & contrast for vibrant vegetation
     const vegBoostColor = baseDayTex.mul(vec3(0.82, 1.25, 0.88));
     const landDayTex = mix(baseDayTex, vegBoostColor, vegFactor);
@@ -491,8 +519,6 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     // Specular map for water reflections: white spec = water, black spec = land
     // Land roughness is modulated by bump_map elevation, vegetation density, and MODIS albedo brightness
     // High albedo = dry sand/ice glare (lower roughness), Low albedo = high absorption vegetation canopy (higher roughness)
-    const albedoSample = albedoMapTex ? texture(albedoMapTex) : vec4(0.5);
-    const albedoVal = albedoSample.r.add(albedoSample.g).add(albedoSample.b).div(3.0);
     const albedoRoughnessShift = float(0.5).sub(albedoVal).mul(albedoPbrStrengthUniform);
     const landRoughnessMap = mix(landRoughnessUniform.mul(0.6), landRoughnessUniform, bumpVal)
         .add(vegFactor.mul(ndviEnhanceUniform).mul(0.15))
