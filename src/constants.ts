@@ -74,11 +74,57 @@ const detectRenderType = (): "webgpu" | "webgl" => {
   return "gpu" in navigator && !!(navigator as any).gpu ? "webgpu" : "webgl";
 };
 
+export const OCEAN_SHADER_CONSTANTS = {
+  // Wave Noise & FBM Parameters
+  NOISE_HASH_P1: [123.34, 456.21],
+  NOISE_HASH_D: 45.32,
+  FBM_OCTAVE1_WEIGHT: 0.65,
+  FBM_OCTAVE2_SCALE: 2.02,
+  FBM_OCTAVE2_WEIGHT: 0.35,
+  WAVE_DRIFT_A: [0.05, 0.03],
+  WAVE_DRIFT_B: [-0.08, 0.02],
+  WAVE_FBM_PRIMARY_WEIGHT: 0.6,
+  WAVE_FBM_SECONDARY_SCALE: 2.02,
+  WAVE_FBM_SECONDARY_WEIGHT: 0.4,
+  WAVE_EPSILON: 0.015,
+
+  // Glint, Sparkle, & Subsurface Scattering
+  SUN_GLINT_EXPONENT: 120.0,
+  WAVE_SPARKLE_EXPONENT: 20.0,
+  WAVE_SPARKLE_INTENSITY: 0.4,
+  SUN_GLINT_TINT: [1.0, 0.95, 0.85],
+  WAVE_SPARKLE_TINT: [0.5, 0.75, 1.0],
+  SSS_FORWARD_EXPONENT: 3.0,
+  SSS_FORWARD_BIAS: 0.2,
+
+  // Bathymetry Specular Masking
+  DEEP_OCEAN_GLINT_BOOST: 0.5,
+  COASTAL_SPEC_DAMPEN_MIN: 0.1,
+  COASTAL_SPEC_DAMPEN_MAX: 0.8,
+  COASTAL_SPEC_DAMPEN_FACTOR: 0.7,
+
+  // Foam Shader Parameters
+  WAVE_CREST_FOAM_MIN: 0.62,
+  WAVE_CREST_FOAM_MAX: 0.82,
+  WAVE_CREST_FOAM_FACTOR: 0.6,
+  SHORE_FOAM_DEPTH_SCALE: 0.7,
+  SHORE_FOAM_DIFF_MAX: 0.35,
+  SHORE_FOAM_DIFF_MIN: 0.02,
+  SHORE_FOAM_DEPTH_MIN: 0.20,
+  SHORE_FOAM_DEPTH_MAX: 0.85,
+  SHORE_FOAM_INTENSITY_BOOST: 1.4,
+  WAVE_FOAM_COLOR: [0.95, 0.98, 1.0],
+  COASTAL_FOAM_SPEC_POWER: 2.0,
+  COASTAL_FOAM_FACTOR: 0.5,
+  COASTAL_FOAM_COLOR: [0.90, 0.94, 0.98],
+};
+
 export const CONSTANTS = {
   RENDER_TYPE: detectRenderType() as "webgpu" | "webgl",
   EARTH_RADIUS: 10,
   ATMOSPHERE_RADIUS: 10.2,
   SEGMENTS: use2k ? 64 : 256, // Less segments for lower-end devices
+  OCEAN_SHADER: OCEAN_SHADER_CONSTANTS,
   TEXTURES: {
     ALBEDO: use2k ? "./2k_earth_daymap.jpg" : "./8k_earth_daymap.jpg",
     NIGHT: use2k ? "./2k_earth_nightmap.jpg" : "./8k_earth_nightmap.jpg",
@@ -198,6 +244,50 @@ export const CONSTANTS = {
       WAVE_SPEED: 1.75,
       SUN_GLINT_POWER: 1.5,
       WAVE_SPARKLE: 0.7,
+    },
+    OCEAN_SHADER: {
+      // Wave Noise & FBM Parameters
+      NOISE_HASH_P1: [123.34, 456.21],
+      NOISE_HASH_D: 45.32,
+      FBM_OCTAVE1_WEIGHT: 0.65,
+      FBM_OCTAVE2_SCALE: 2.02,
+      FBM_OCTAVE2_WEIGHT: 0.35,
+      WAVE_DRIFT_A: [0.05, 0.03],
+      WAVE_DRIFT_B: [-0.08, 0.02],
+      WAVE_FBM_PRIMARY_WEIGHT: 0.6,
+      WAVE_FBM_SECONDARY_SCALE: 2.02,
+      WAVE_FBM_SECONDARY_WEIGHT: 0.4,
+      WAVE_EPSILON: 0.015,
+
+      // Glint, Sparkle, & Subsurface Scattering
+      SUN_GLINT_EXPONENT: 120.0,
+      WAVE_SPARKLE_EXPONENT: 20.0,
+      WAVE_SPARKLE_INTENSITY: 0.4,
+      SUN_GLINT_TINT: [1.0, 0.95, 0.85],
+      WAVE_SPARKLE_TINT: [0.5, 0.75, 1.0],
+      SSS_FORWARD_EXPONENT: 3.0,
+      SSS_FORWARD_BIAS: 0.2,
+
+      // Bathymetry Specular Masking
+      DEEP_OCEAN_GLINT_BOOST: 0.5,
+      COASTAL_SPEC_DAMPEN_MIN: 0.1,
+      COASTAL_SPEC_DAMPEN_MAX: 0.8,
+      COASTAL_SPEC_DAMPEN_FACTOR: 0.7,
+
+      // Foam Shader Parameters
+      WAVE_CREST_FOAM_MIN: 0.62,
+      WAVE_CREST_FOAM_MAX: 0.82,
+      WAVE_CREST_FOAM_FACTOR: 0.6,
+      SHORE_FOAM_DEPTH_SCALE: 0.7,
+      SHORE_FOAM_DIFF_MAX: 0.35,
+      SHORE_FOAM_DIFF_MIN: 0.02,
+      SHORE_FOAM_DEPTH_MIN: 0.20,
+      SHORE_FOAM_DEPTH_MAX: 0.85,
+      SHORE_FOAM_INTENSITY_BOOST: 1.4,
+      WAVE_FOAM_COLOR: [0.95, 0.98, 1.0],
+      COASTAL_FOAM_SPEC_POWER: 2.0,
+      COASTAL_FOAM_FACTOR: 0.5,
+      COASTAL_FOAM_COLOR: [0.90, 0.94, 0.98],
     },
     EARTH: {
       ROTATION_SPEED: 0.0001,

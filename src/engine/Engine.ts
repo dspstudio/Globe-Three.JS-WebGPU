@@ -30,6 +30,8 @@ import {
 } from "./LensFlare";
 import { colorGradeShader, vignetteShader, gtUchimuraShader } from "./ColorGrading";
 import { buildGui } from "./GUIBuilder";
+import { Satellites } from "./Satellites";
+import { LocationManager } from "./LocationManager";
 import { BackgroundStars } from "./BackgroundStars";
 import { CountryBorders } from "./CountryBorders";
 import { CountryLabels } from "./CountryLabels";
@@ -79,12 +81,6 @@ export class Engine {
   private anamorphicThicknessUniform: any;
   private anamorphicColorUniform: any;
 
-  // Pre-allocated temporary vectors for zero allocation animation loop
-  private tempVec3 = new THREE.Vector3();
-  private tempDirToAnchor = new THREE.Vector3();
-  private tempTargetPos = new THREE.Vector3();
-  private tempEarthCenter = new THREE.Vector3(0, 0, 0);
-  private tempDirToCamera = new THREE.Vector3();
   private anamorphicSettings: {
     enabled: boolean;
     intensity: number;
@@ -112,23 +108,9 @@ export class Engine {
     radius: number;
     threshold: number;
   };
-  private satelliteSettings!: {
-    enabled: boolean;
-    count: number;
-    size: number;
-    color: number;
-    speedScale: number;
-  };
-  private satellitePoints: THREE.Points | null = null;
-  private satelliteData: {
-    radii: Float32Array;
-    inclinations: Float32Array;
-    ascendingNodes: Float32Array;
-    angularVelocities: Float32Array;
-    phases: Float32Array;
-  } | null = null;
-  private satSizeUniform!: any;
-  private satColorUniform!: any;
+  private satellites: Satellites | null = null;
+  private locationManager: LocationManager = new LocationManager();
+
   private backgroundStars: BackgroundStars | null = null;
   private backgroundStarsSettings!: {
     enabled: boolean;
@@ -146,10 +128,22 @@ export class Engine {
   public countryBorders: CountryBorders | null = null;
   public countryLabels: CountryLabels | null = null;
   public graticule: Graticule | null = null;
-  private locationAnchors: Map<string, THREE.Object3D> = new Map();
-  public onLocationsUpdate: ((locations: ProjectedLocation[]) => void) | null = null;
+
+  public get onLocationsUpdate(): ((locations: ProjectedLocation[]) => void) | null {
+    return this.locationManager.onLocationsUpdate;
+  }
+  public set onLocationsUpdate(cb: ((locations: ProjectedLocation[]) => void) | null) {
+    this.locationManager.onLocationsUpdate = cb;
+  }
+
   public onCountryLabelsUpdate: ((labels: ProjectedCountryLabel[]) => void) | null = null;
-  public focusTargetAnchorId: string | null = null;
+
+  public get focusTargetAnchorId(): string | null {
+    return this.locationManager.focusTargetAnchorId;
+  }
+  public set focusTargetAnchorId(id: string | null) {
+    this.locationManager.focusTargetAnchorId = id;
+  }
 
   private isDisposed: boolean = false;
   private resizeObserver: ResizeObserver | null = null;
@@ -333,7 +327,9 @@ export class Engine {
 
     this.graticule = new Graticule(this.earthGroup);
 
-    this.initLocations();
+    if (this.earthGroup) {
+      this.locationManager.init(this.earthGroup);
+    }
 
     if (onProgress) onProgress("Building Render Pipeline");
     const { RenderPipeline } = await import("three/webgpu");
@@ -530,15 +526,14 @@ export class Engine {
       resolutionScale: CONSTANTS.GUI.DEBUG.RESOLUTION_SCALE || 1.0,
     };
 
-    this.satelliteSettings = {
+    this.satellites = new Satellites({
       enabled: CONSTANTS.GUI.SATELLITES.ENABLED,
       count: CONSTANTS.GUI.SATELLITES.COUNT,
       size: CONSTANTS.GUI.SATELLITES.SIZE,
       color: CONSTANTS.GUI.SATELLITES.COLOR,
       speedScale: CONSTANTS.GUI.SATELLITES.SPEED_SCALE,
-    };
-
-    this.initSatellites();
+    });
+    this.satellites.init(this.root);
 
     this.backgroundStarsSettings = {
       enabled: CONSTANTS.GUI.BACKGROUND_STARS.ENABLED,
@@ -618,8 +613,8 @@ export class Engine {
       renderer: this.renderer,
       canvas: this.canvas,
       renderPipeline: this.renderPipeline,
-      satelliteSettings: this.satelliteSettings,
-      satellitePoints: this.satellitePoints,
+      satelliteSettings: this.satellites.settings,
+      satellitePoints: this.satellites.points,
       backgroundStarsSettings: this.backgroundStarsSettings,
       backgroundStars: this.backgroundStars,
       citiesSettings: this.citiesSettings,
@@ -673,24 +668,7 @@ export class Engine {
     this.animationId = requestAnimationFrame(this.animate);
 
     // Smooth camera transition to focused anchor
-    if (this.focusTargetAnchorId) {
-      const anchor = this.locationAnchors.get(this.focusTargetAnchorId);
-      if (anchor) {
-        anchor.getWorldPosition(this.tempVec3);
-        this.tempDirToAnchor.copy(this.tempVec3).normalize();
-        
-        const currentDistance = this.camera.position.length();
-        const targetDistance = Math.max(CONSTANTS.EARTH_RADIUS * 1.5, Math.min(currentDistance, CONSTANTS.EARTH_RADIUS * 2.5));
-        
-        this.tempTargetPos.copy(this.tempDirToAnchor).multiplyScalar(targetDistance);
-        this.camera.position.lerp(this.tempTargetPos, 0.08);
-        
-        if (this.camera.position.distanceTo(this.tempTargetPos) < 0.05) {
-          this.camera.position.copy(this.tempTargetPos);
-          this.focusTargetAnchorId = null;
-        }
-      }
-    }
+    this.locationManager.updateFocus(this.camera);
 
     this.controls.update();
 
@@ -759,44 +737,9 @@ export class Engine {
       }
     }
 
-    // Update Satellites Positions if enabled
-    if (this.satellitePoints) {
-      this.satellitePoints.visible = this.satelliteSettings.enabled;
-      if (this.satelliteSettings.enabled && this.satelliteData) {
-        const count = this.satelliteSettings.count;
-        const posAttr = this.satellitePoints.geometry.attributes.position as THREE.BufferAttribute;
-        const positions = posAttr.array as Float32Array;
-        const { radii, inclinations, ascendingNodes, angularVelocities, phases } = this.satelliteData;
-        const speedScale = this.satelliteSettings.speedScale;
-
-        for (let i = 0; i < count; i++) {
-          phases[i] += angularVelocities[i] * speedScale;
-          if (phases[i] > Math.PI * 2) phases[i] -= Math.PI * 2;
-
-          const r = radii[i];
-          const theta = phases[i];
-          const inc = inclinations[i];
-          const node = ascendingNodes[i];
-
-          const x0 = r * Math.cos(theta);
-          const z0 = r * Math.sin(theta);
-
-          const x1 = x0 * Math.cos(inc);
-          const y1 = x0 * Math.sin(inc);
-          const z1 = z0;
-
-          const x2 = x1 * Math.cos(node) + z1 * Math.sin(node);
-          const y2 = y1;
-          const z2 = -x1 * Math.sin(node) + z1 * Math.cos(node);
-
-          const i3 = i * 3;
-          positions[i3] = x2;
-          positions[i3 + 1] = y2;
-          positions[i3 + 2] = z2;
-        }
-
-        posAttr.needsUpdate = true;
-      }
+    // Update Satellites
+    if (this.satellites) {
+      this.satellites.update();
     }
 
     this.anamorphicSizeUniform.value = this.anamorphicSettings.size;
@@ -816,7 +759,11 @@ export class Engine {
       this.anamorphicSettings,
     );
 
-    this.updateProjectedLocations();
+    this.locationManager.updateProjectedLocations(
+      this.camera,
+      this.canvas,
+      this.citiesSettings ? this.citiesSettings.enabled : false
+    );
     this.updateProjectedCountryLabels();
 
     if (this.renderer && this.renderPipeline) {
@@ -827,144 +774,6 @@ export class Engine {
       this.stats.update();
     }
   };
-
-  private initSatellites() {
-    const count = this.satelliteSettings.count;
-    const radii = new Float32Array(count);
-    const inclinations = new Float32Array(count);
-    const ascendingNodes = new Float32Array(count);
-    const angularVelocities = new Float32Array(count);
-    const phases = new Float32Array(count);
-
-    let idx = 0;
-
-    // 1. LEO Shells (65%)
-    const leoCount = Math.floor(count * 0.65);
-    const shells = [
-      { r: 10.6, inc: 53 * (Math.PI / 180), planes: 12 },
-      { r: 10.9, inc: 70 * (Math.PI / 180), planes: 8 },
-      { r: 11.3, inc: 97.6 * (Math.PI / 180), planes: 10 },
-      { r: 11.7, inc: 53 * (Math.PI / 180), planes: 8 },
-    ];
-
-    let shellIdx = 0;
-    while (idx < leoCount && idx < count) {
-      const shell = shells[shellIdx % shells.length];
-      shellIdx++;
-
-      const satsInShell = Math.floor(leoCount / shells.length);
-      const satsPerPlane = Math.floor(satsInShell / shell.planes);
-      
-      for (let p = 0; p < shell.planes; p++) {
-        const node = (p / shell.planes) * Math.PI * 2 + (Math.random() * 0.02);
-        for (let s = 0; s < satsPerPlane; s++) {
-          if (idx >= count) break;
-          radii[idx] = shell.r;
-          inclinations[idx] = shell.inc;
-          ascendingNodes[idx] = node;
-          angularVelocities[idx] = 0.003 * Math.pow(10.6 / shell.r, 1.5);
-          phases[idx] = (s / satsPerPlane) * Math.PI * 2 + (Math.random() * 0.05);
-          idx++;
-        }
-      }
-    }
-
-    // 2. MEO GPS Constellations (15%)
-    const meoCount = Math.floor(count * 0.15);
-    const meoTarget = idx + meoCount;
-    const meoPlanes = 6;
-    const meoSatsPerPlane = Math.floor(meoCount / meoPlanes);
-    const meoRadius = 16.5;
-    const meoInc = 55 * (Math.PI / 180);
-
-    for (let p = 0; p < meoPlanes; p++) {
-      const node = (p / meoPlanes) * Math.PI * 2;
-      for (let s = 0; s < meoSatsPerPlane; s++) {
-        if (idx >= count || idx >= meoTarget) break;
-        radii[idx] = meoRadius + (Math.random() * 0.4 - 0.2);
-        inclinations[idx] = meoInc + (Math.random() * 0.02 - 0.01);
-        ascendingNodes[idx] = node;
-        angularVelocities[idx] = 0.003 * Math.pow(10.6 / meoRadius, 1.5);
-        phases[idx] = (s / meoSatsPerPlane) * Math.PI * 2;
-        idx++;
-      }
-    }
-
-    // 3. GEO equatorial belt (10%)
-    const geoCount = Math.floor(count * 0.10);
-    const geoTarget = idx + geoCount;
-    const geoRadius = 24.0;
-    for (let i = 0; idx < geoTarget && idx < count; i++) {
-      radii[idx] = geoRadius + (Math.random() * 0.2 - 0.1);
-      inclinations[idx] = 0.0 + (Math.random() * 0.01 - 0.005);
-      ascendingNodes[idx] = Math.random() * Math.PI * 2;
-      angularVelocities[idx] = 0.003 * Math.pow(10.6 / geoRadius, 1.5);
-      phases[idx] = Math.random() * Math.PI * 2;
-      idx++;
-    }
-
-    // 4. Debris / Random orbits (remaining %)
-    while (idx < count) {
-      const r = 10.5 + Math.random() * 18.0;
-      radii[idx] = r;
-      inclinations[idx] = Math.random() * Math.PI;
-      ascendingNodes[idx] = Math.random() * Math.PI * 2;
-      angularVelocities[idx] = 0.003 * Math.pow(10.6 / r, 1.5);
-      phases[idx] = Math.random() * Math.PI * 2;
-      idx++;
-    }
-
-    this.satelliteData = { radii, inclinations, ascendingNodes, angularVelocities, phases };
-
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(count * 3);
-    
-    for (let i = 0; i < count; i++) {
-      const r = radii[i];
-      const theta = phases[i];
-      const inc = inclinations[i];
-      const node = ascendingNodes[i];
-
-      const x0 = r * Math.cos(theta);
-      const z0 = r * Math.sin(theta);
-
-      const x1 = x0 * Math.cos(inc);
-      const y1 = x0 * Math.sin(inc);
-      const z1 = z0;
-
-      const x2 = x1 * Math.cos(node) + z1 * Math.sin(node);
-      const y2 = y1;
-      const z2 = -x1 * Math.sin(node) + z1 * Math.cos(node);
-
-      const i3 = i * 3;
-      positions[i3] = x2;
-      positions[i3 + 1] = y2;
-      positions[i3 + 2] = z2;
-    }
-
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-
-    this.satSizeUniform = uniform(this.satelliteSettings.size);
-    this.satColorUniform = uniform(new THREE.Color(this.satelliteSettings.color));
-
-    const material = new PointsNodeMaterial({
-      transparent: true,
-      opacity: 0.8,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      sizeAttenuation: true,
-    });
-    material.sizeNode = this.satSizeUniform;
-    material.colorNode = this.satColorUniform;
-
-    this.satellitePoints = new THREE.Points(geometry, material);
-    this.satellitePoints.visible = this.satelliteSettings.enabled;
-    this.satellitePoints.userData = {
-      sizeUniform: this.satSizeUniform,
-      colorUniform: this.satColorUniform,
-    };
-    this.root.add(this.satellitePoints);
-  }
 
   public start() {
     this.animate();
@@ -1044,84 +853,6 @@ export class Engine {
     if (this.graticule) {
       this.graticule.dispose();
     }
-  }
-
-  private initLocations() {
-    if (!this.earthGroup) return;
-    const radius = CONSTANTS.EARTH_RADIUS + 0.1; // Slightly float above surface
-
-    for (const loc of CINEMATIC_LOCATIONS) {
-      const phi = (90 - loc.lat) * (Math.PI / 180);
-      const theta = (loc.lng + 180) * (Math.PI / 180);
-
-      const x = -radius * Math.cos(theta) * Math.sin(phi);
-      const y = radius * Math.cos(phi);
-      const z = radius * Math.sin(theta) * Math.sin(phi);
-
-      const anchor = new THREE.Object3D();
-      anchor.position.set(x, y, z);
-      this.earthGroup.add(anchor);
-      this.locationAnchors.set(loc.id, anchor);
-    }
-  }
-
-  private updateProjectedLocations() {
-    if (!this.onLocationsUpdate || this.locationAnchors.size === 0) return;
-
-    if (this.citiesSettings && !this.citiesSettings.enabled) {
-      this.onLocationsUpdate([]);
-      return;
-    }
-
-    const projected: ProjectedLocation[] = [];
-
-    const width = this.canvas.parentElement ? this.canvas.parentElement.clientWidth : window.innerWidth;
-    const height = this.canvas.parentElement ? this.canvas.parentElement.clientHeight : window.innerHeight;
-
-    this.tempDirToCamera.copy(this.camera.position).sub(this.tempEarthCenter).normalize();
-
-    for (const [id, anchor] of this.locationAnchors.entries()) {
-      anchor.getWorldPosition(this.tempVec3);
-
-      // Distance check is useful to make sure they scale nicely
-      const distanceToCamera = this.camera.position.distanceTo(this.tempVec3);
-
-      // Check horizon visibility based on dot product of anchor direction and camera direction
-      this.tempDirToAnchor.copy(this.tempVec3).sub(this.tempEarthCenter).normalize();
-      const dot = this.tempDirToAnchor.dot(this.tempDirToCamera);
-
-      // Dot product > 0.0 means front-facing. We transition opacity down as it reaches the limb.
-      const visible = dot > -0.05;
-      let opacity = 0.0;
-      if (dot > 0.0) {
-        opacity = Math.min(1.0, dot / 0.2); // Fades from dot=0.2 to dot=0
-      }
-
-      // Project 3D vector to 2D NDC
-      this.tempVec3.project(this.camera);
-
-      // Convert NDC to screen pixels
-      const x = (this.tempVec3.x * 0.5 + 0.5) * width;
-      const y = (this.tempVec3.y * -0.5 + 0.5) * height;
-
-      // Find original location info
-      const info = CINEMATIC_LOCATIONS.find((l) => l.id === id);
-      if (info) {
-        projected.push({
-          id,
-          name: info.name,
-          lat: info.lat,
-          lng: info.lng,
-          x,
-          y,
-          visible,
-          opacity,
-          distanceToCamera,
-        });
-      }
-    }
-
-    this.onLocationsUpdate(projected);
   }
 
   private updateProjectedCountryLabels() {

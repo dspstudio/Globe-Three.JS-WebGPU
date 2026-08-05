@@ -1,38 +1,11 @@
 import * as THREE from 'three';
-import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, atan, sub, float, min, bumpMap, Discard, select, Fn, clamp, cos, sin, time, fract, floor, abs } from 'three/tsl';
-import { MeshStandardNodeMaterial, MeshBasicNodeMaterial, MeshPhysicalNodeMaterial } from 'three/webgpu';
+import { texture, normalMap, mix, color, normalize, cross, cameraPosition, positionWorld, pow, dot, max, add, mul, vec3, vec2, smoothstep, uniform, equirectUV, positionLocal, modelWorldMatrixInverse, vec4, uv, distance, length, acos, asin, atan, sub, float, min, bumpMap, Discard, select, Fn, clamp, cos, sin, time, abs } from 'three/tsl';
+import { MeshPhysicalNodeMaterial } from 'three/webgpu';
 import { CONSTANTS } from '../constants';
 import { createInnerLayers } from './InnerLayers';
-
-// TSL Noise & FBM helpers for procedural ocean wave simulation
-const hash2D = Fn(([p]: [any]) => {
-    const pVec = vec2(p);
-    const p1 = fract(pVec.mul(vec2(123.34, 456.21)));
-    const d = dot(p1, p1.add(vec2(45.32)));
-    const p2 = p1.add(vec2(d));
-    return fract(p2.x.mul(p2.y));
-});
-
-const noise2D = Fn(([p]: [any]) => {
-    const pVec = vec2(p);
-    const i = floor(pVec);
-    const f = fract(pVec);
-    const a = hash2D(i);
-    const b = hash2D(i.add(vec2(1.0, 0.0)));
-    const c = hash2D(i.add(vec2(0.0, 1.0)));
-    const d = hash2D(i.add(vec2(1.0, 1.0)));
-    const u = f.mul(f).mul(float(3.0).sub(f.mul(2.0)));
-    const mixAB = mix(a, b, u.x);
-    const mixCD = mix(c, d, u.x);
-    return mix(mixAB, mixCD, u.y);
-});
-
-const fbm2D = Fn(([p]: [any]) => {
-    const pVec = vec2(p);
-    const n1 = noise2D(pVec).mul(0.65);
-    const n2 = noise2D(pVec.mul(2.02)).mul(0.35);
-    return n1.add(n2);
-});
+import { loadEarthTextures } from './EarthTextures';
+import { computeWaveData } from './OceanWaves';
+import { createAtmosphereMeshes } from './AtmosphereShader';
 
 export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: any, moonPosUniform: any, maxAnisotropy: number = 1): Promise<THREE.Group> {
     const group = new THREE.Group();
@@ -47,68 +20,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const cutDiscard = positionLocal.x.greaterThan(cutX);
 
     // Load textures
-    let imergMapTex: THREE.Texture | null = null;
-    let viirsTrueColorMapTex: THREE.Texture | null = null;
-    const [colorMapTex, specularMapTex, normalMapTex, cloudsMapTex, nightMapTex, bumpMapTex, sstMapTex, ndviMapTex, bathymetryMapTex, laiMapTex, albedoMapTex] = await Promise.all([
-        loader.loadAsync(CONSTANTS.TEXTURES.ALBEDO),
-        loader.loadAsync(CONSTANTS.TEXTURES.SPECULAR),
-        loader.loadAsync(CONSTANTS.TEXTURES.NORMAL),
-        loader.loadAsync(CONSTANTS.TEXTURES.CLOUDS),
-        loader.loadAsync(CONSTANTS.TEXTURES.NIGHT),
-        loader.loadAsync(CONSTANTS.TEXTURES.BUMP),
-        loader.loadAsync(CONSTANTS.TEXTURES.SST_ANOMALIES).catch(() => null),
-        loader.loadAsync(CONSTANTS.TEXTURES.MODIS_NDVI).catch(() => null),
-        loader.loadAsync(CONSTANTS.TEXTURES.BATHYMETRY).catch(() => null),
-        loader.loadAsync(CONSTANTS.TEXTURES.MODIS_LAI).catch(() => null),
-        loader.loadAsync(CONSTANTS.TEXTURES.MODIS_ALBEDO).catch(() => null)
-    ]);
-
-    viirsTrueColorMapTex = await loader.loadAsync(CONSTANTS.TEXTURES.VIIRS_TRUE_COLOR).catch(() => null);
-
-    imergMapTex = await loader.loadAsync(CONSTANTS.TEXTURES.IMERG_PRECIPITATION).catch(async () => {
-        // Fallback to recent date if requested date returns no tile data
-        const fallbackUrl = "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=IMERG_Precipitation_Rate&FORMAT=image/png&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=2024-07-27";
-        return loader.loadAsync(fallbackUrl).catch(() => null);
-    });
-
-    colorMapTex.colorSpace = THREE.SRGBColorSpace;
-    cloudsMapTex.colorSpace = THREE.SRGBColorSpace;
-    nightMapTex.colorSpace = THREE.SRGBColorSpace;
-    if (sstMapTex) {
-        sstMapTex.colorSpace = THREE.SRGBColorSpace;
-        sstMapTex.anisotropy = maxAnisotropy;
-    }
-    if (ndviMapTex) {
-        ndviMapTex.colorSpace = THREE.SRGBColorSpace;
-        ndviMapTex.anisotropy = maxAnisotropy;
-    }
-    if (laiMapTex) {
-        laiMapTex.colorSpace = THREE.SRGBColorSpace;
-        laiMapTex.anisotropy = maxAnisotropy;
-    }
-    if (albedoMapTex) {
-        albedoMapTex.colorSpace = THREE.SRGBColorSpace;
-        albedoMapTex.anisotropy = maxAnisotropy;
-    }
-    if (imergMapTex) {
-        imergMapTex.colorSpace = THREE.SRGBColorSpace;
-        imergMapTex.anisotropy = maxAnisotropy;
-    }
-    if (viirsTrueColorMapTex) {
-        viirsTrueColorMapTex.colorSpace = THREE.SRGBColorSpace;
-        viirsTrueColorMapTex.anisotropy = maxAnisotropy;
-    }
-    if (bathymetryMapTex) {
-        bathymetryMapTex.colorSpace = THREE.SRGBColorSpace;
-        bathymetryMapTex.anisotropy = maxAnisotropy;
-    }
-
-    colorMapTex.anisotropy = maxAnisotropy;
-    specularMapTex.anisotropy = maxAnisotropy;
-    normalMapTex.anisotropy = maxAnisotropy;
-    cloudsMapTex.anisotropy = maxAnisotropy;
-    nightMapTex.anisotropy = maxAnisotropy;
-    bumpMapTex.anisotropy = maxAnisotropy;
+    const tex = await loadEarthTextures(loader, maxAnisotropy);
+    group.userData.updateGibsDate = tex.updateGibsDate;
 
     // 1. Earth base
     const geoHigh = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
@@ -119,12 +32,11 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const sunDir = sunDirUniform;
     
     // Procedural shadow logic: 
-    // Ray from surface fragment positionLocal along +sunDirLocal towards cloud sphere at radius Rc = Re + shadowDist
     const sunDirLocal = normalize(modelWorldMatrixInverse.mul(vec4(sunDir, 0.0)).xyz);
     
     const shadowDistUniform = uniform(CONSTANTS.GUI.CLOUD_SHADOWS.DISTANCE);
     const shadowIntensityUniform = uniform(CONSTANTS.GUI.CLOUD_SHADOWS.INTENSITY);
-    const shadowColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.CLOUD_SHADOWS.COLOR)); // roughly 0.2, 0.25, 0.35
+    const shadowColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.CLOUD_SHADOWS.COLOR));
     const cloudRotationYUniform = uniform(0.0);
 
     group.userData.shadowDist = shadowDistUniform;
@@ -134,16 +46,14 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     // Ray-sphere intersection for cloud shadow projection
     const posL = positionLocal;
-    const re = float(CONSTANTS.EARTH_RADIUS); // 10.0
-    const rc = re.add(shadowDistUniform); // e.g. 10.08
-    const deltaRc = rc.mul(rc).sub(re.mul(re)); // Rc^2 - Re^2
+    const re = float(CONSTANTS.EARTH_RADIUS);
+    const rc = re.add(shadowDistUniform);
+    const deltaRc = rc.mul(rc).sub(re.mul(re));
     const dotPS = dot(posL, sunDirLocal);
     
-    // t = -dotPS + sqrt(dotPS^2 + deltaRc)
     const rayT = dotPS.negate().add(dotPS.mul(dotPS).add(deltaRc).max(0.0).sqrt());
     const shadowPosLocal = posL.add(sunDirLocal.mul(rayT));
 
-    // Rotate shadowPosLocal around Y axis by -cloudRotationY to align with the cloud mesh's relative rotation
     const rotAngle = cloudRotationYUniform;
     const cosR = cos(rotAngle);
     const sinR = sin(rotAngle);
@@ -151,14 +61,13 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const rotZ = shadowPosLocal.x.mul(sinR).negate().add(shadowPosLocal.z.mul(cosR));
     const shadowPosRotated = vec3(rotX, shadowPosLocal.y, rotZ);
 
-    // Map 3D unit direction on cloud sphere to exact SphereGeometry UVs
     const normP = normalize(shadowPosRotated);
     const angleU = atan(normP.z, normP.x.negate());
     const shadowU = angleU.div(Math.PI * 2.0).add(select(angleU.lessThan(0.0), 1.0, 0.0));
     const shadowV = asin(clamp(normP.y, -1.0, 1.0)).div(Math.PI).add(0.5);
     const shadowUv = vec2(shadowU, shadowV);
 
-    const shadowOpacity = texture(cloudsMapTex, shadowUv).r;
+    const shadowOpacity = texture(tex.cloudsMapTex, shadowUv).r;
     
     const waterRoughnessUniform = uniform(CONSTANTS.GUI.OCEAN.ROUGHNESS);
     const waterMetalnessUniform = uniform(CONSTANTS.GUI.OCEAN.METALNESS);
@@ -204,16 +113,11 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     group.userData.sunGlintPower = sunGlintPowerUniform;
     group.userData.waveSparkle = waveSparkleUniform;
     
-    // Calculate shadow dimmer mask
     const cloudShadow = mix(vec3(1.0), shadowColorUniform, shadowOpacity.mul(shadowIntensityUniform));
     
-    // Light is at (10, 5, 10) in Engine.ts
     const sunDot = dot(normalize(positionWorld), sunDir);
-    
-    // Single unified fade from day to night across the terminator
     const nightFade = smoothstep(0.2, -0.2, sunDot);
     
-    // Twilight terminator gradient (optional sunset tint)
     const twilightColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.TWILIGHT_COLOR));
     group.userData.twilightColor = twilightColorUniform;
     
@@ -226,72 +130,53 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const twilight1 = smoothstep(0.0, 0.2, sunDot).oneMinus(); 
     const twilight2 = smoothstep(-0.2, 0.0, sunDot);           
     const twilightFactor = twilight1.mul(twilight2);
-    
-    // Only apply the twilight tint as a gentle additive glow or mix it softly
     const twilightTint = mix(vec3(1.0), twilightColorUniform, twilightFactor.mul(0.5));
 
-    const spec = texture(specularMapTex).r;
+    const spec = texture(tex.specularMapTex).r;
     
-    // Terrain Self-Shadowing (Occlusion from Sun using Normal Map)
+    // Terrain Self-Shadowing
     const terrainShadowIntensityUniform = uniform(CONSTANTS.GUI.EARTH.TERRAIN_SHADOW_INTENSITY);
     const terrainShadowOffsetUniform = uniform(CONSTANTS.GUI.EARTH.TERRAIN_SHADOW_OFFSET);
     group.userData.terrainShadowIntensity = terrainShadowIntensityUniform;
     group.userData.terrainShadowOffset = terrainShadowOffsetUniform;
     
     const surfaceNorm = normalize(positionLocal);
-    // Rough tangent space from sphere
     const vTan = normalize(cross(vec3(0.0, 1.0, 0.0), surfaceNorm));
     const vBit = normalize(cross(surfaceNorm, vTan));
     
-    // Current perturbed normal
-    const nMap = texture(normalMapTex).xyz.mul(2.0).sub(1.0);
+    const nMap = texture(tex.normalMapTex).xyz.mul(2.0).sub(1.0);
     const pNorm = normalize(vTan.mul(nMap.x).add(vBit.mul(nMap.y)).add(surfaceNorm.mul(nMap.z)));
     const terrainDot = max(0.0, dot(pNorm, sunDirLocal));
     
-    // Offset UV towards the sun to read adjacent normal
     const sunProj = sunDirLocal.sub(surfaceNorm.mul(dot(sunDirLocal, surfaceNorm)));
     const sunT = normalize(sunProj.add(vec3(0.000001)));
     const offsetPos = normalize(positionLocal.add(sunT.mul(terrainShadowOffsetUniform)));
     const offsetUv = equirectUV(offsetPos);
     
-    const offsetNMap = texture(normalMapTex, offsetUv).xyz.mul(2.0).sub(1.0);
+    const offsetNMap = texture(tex.normalMapTex, offsetUv).xyz.mul(2.0).sub(1.0);
     const pNormOffset = normalize(vTan.mul(offsetNMap.x).add(vBit.mul(offsetNMap.y)).add(surfaceNorm.mul(offsetNMap.z)));
     const offsetDot = max(0.0, dot(pNormOffset, sunDirLocal));
     
-    // If the adjacent point towards the sun is facing the sun more than we are, it casts a shadow
     const occlusion = max(0.0, offsetDot.sub(terrainDot));
-    const landMask = spec.oneMinus(); // Land has dark specular
-    // Base shadow intensity multiplied by how much daylight we have
+    const landMask = spec.oneMinus();
     const daylightMask = smoothstep(0.0, 0.2, dot(surfaceNorm, sunDirLocal));
     const selfShadowFactor = smoothstep(0.0, 0.3, occlusion).mul(landMask).mul(terrainShadowIntensityUniform).mul(daylightMask);
-    
-    // Apply a deep natural shadow color 
     const terrainShadowColor = mix(vec3(1.0), vec3(0.1, 0.15, 0.2), selfShadowFactor);
     
-    // --- Real-time Moon Eclipse Shadow Calculation ---
-    // Vector from current surface fragment to the moon
+    // Real-time Moon Eclipse Shadow
     const fragmentToMoon = sub(moonPosUniform, positionWorld);
-    const distToMoon = length(fragmentToMoon);
     const dirFragmentToMoon = normalize(fragmentToMoon);
-    
-    // Angle between moon direction and sun direction
-    // Clamp dot product to [-1.0, 1.0] to prevent acos(NaN)
     const thetaMoon = acos(max(float(-1.0), min(float(1.0), dot(dirFragmentToMoon, sunDir))));
     
-    // Angular dimensions
-    // For a realistic looking tight shadow (similar to real earth eclipses):
     const thetaM = float(0.024); 
     const sunAngularRadiusVal = float(0.02); 
-    
     const penumbraOuter = thetaM.add(sunAngularRadiusVal);
     const umbraInner = max(float(0.0), thetaM.sub(sunAngularRadiusVal));
     
-    // Smooth transition from full light (0) to deep umbra (1)
     const moonEclipseShadow = smoothstep(penumbraOuter, umbraInner, thetaMoon);
     const eclipseDimmer = mix(vec3(1.0), vec3(0.015, 0.02, 0.025), moonEclipseShadow);
-    // --------------------------------------------------
 
-    // --- Optical Ocean & Depth Gradient Shading ---
+    // Optical Ocean & Depth Gradient Shading
     const ndviEnhanceUniform = uniform(CONSTANTS.GUI.EARTH.NDVI_ENHANCE_STRENGTH || 0.3);
     const laiEnhanceUniform = uniform(CONSTANTS.GUI.EARTH.LAI_ENHANCE_STRENGTH || 0.3);
     const snowMinRgbUniform = uniform(CONSTANTS.GUI.EARTH.SNOW_MASK_MIN_RGB ?? 0.35);
@@ -308,157 +193,104 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     group.userData.snowMaxAlbedo = snowMaxAlbedoUniform;
     group.userData.greenDomThresh = greenDomThreshUniform;
 
-    const baseDayTex = texture(colorMapTex);
-    const ndviSample = ndviMapTex ? texture(ndviMapTex) : vec4(0.0);
-    const laiSample = laiMapTex ? texture(laiMapTex) : vec4(0.0);
-    const albedoSample = albedoMapTex ? texture(albedoMapTex) : vec4(0.5);
+    const baseDayTex = texture(tex.colorMapTex);
+    const ndviSample = tex.ndviMapTex ? texture(tex.ndviMapTex) : vec4(0.0);
+    const laiSample = tex.laiMapTex ? texture(tex.laiMapTex) : vec4(0.0);
+    const albedoSample = tex.albedoMapTex ? texture(tex.albedoMapTex) : vec4(0.5);
 
-    // Vegetation density from MODIS NDVI (greenness index) & Leaf Area Index (LAI canopy index)
     const ndviVal = ndviSample.a;
     const laiVal = laiSample.r.add(laiSample.g).add(laiSample.b).div(3.0);
     const albedoVal = albedoSample.r.add(albedoSample.g).add(albedoSample.b).div(3.0);
     
-    // Snow/ice mask based on surface albedo brightness & color neutrality
     const minRGB = min(baseDayTex.r, min(baseDayTex.g, baseDayTex.b));
     const snowBrightnessFactor = smoothstep(snowMinRgbUniform, snowMaxRgbUniform, minRGB);
     const snowAlbedoFactor = smoothstep(snowMinAlbedoUniform, snowMaxAlbedoUniform, albedoVal);
     const snowFactor = max(snowBrightnessFactor, snowAlbedoFactor);
     const nonSnowMask = float(1.0).sub(snowFactor);
 
-    // Green dominance check: vegetation must have green channel exceeding red channel
     const greenDom = smoothstep(float(0.0), greenDomThreshUniform, baseDayTex.g.sub(baseDayTex.r));
 
-    // Land-masked, non-snow-masked, & green-dominant combined vegetation factor
     const vegFactor = ndviVal.mul(ndviEnhanceUniform)
         .add(laiVal.mul(laiEnhanceUniform))
         .clamp(0.0, 1.0)
         .mul(float(1.0).sub(spec))
         .mul(nonSnowMask)
         .mul(greenDom);
-    // Richer foliage tinting: boost lush green channel & contrast for vibrant vegetation
     const vegBoostColor = baseDayTex.mul(vec3(0.82, 1.25, 0.88));
     const landDayTex = mix(baseDayTex, vegBoostColor, vegFactor);
 
-    const bathymetrySample = bathymetryMapTex ? texture(bathymetryMapTex) : texture(bumpMapTex);
-    
-    // Depth factor from high-res GEBCO bathymetry map (gebco_08_rev_bath_5400x2700.png)
+    const bathymetrySample = tex.bathymetryMapTex ? texture(tex.bathymetryMapTex) : texture(tex.bumpMapTex);
     const depthVal = bathymetrySample.r.add(bathymetrySample.g).add(bathymetrySample.b).div(3.0);
     const depthFactor = depthVal.mul(bathymetryIntensityUniform).clamp(0.0, 1.0);
     
-    // Depth Gradient Color (Deep water vs Shallow water color)
     const oceanGradientColor = mix(oceanDeepColorUniform, oceanShallowColorUniform, depthFactor);
-    
-    // Water Clarity / Absorption: blend between pure depth gradient colors and underlying day satellite texture
     const oceanColor = mix(oceanGradientColor, landDayTex, waterClarityUniform);
-    
-    // Apply custom ocean colors only to ocean areas (where specular mask spec > 0)
     const oceanSurfaceTex = mix(landDayTex, oceanColor, spec);
 
-    // --- Procedural Animated Wave Heights & Normal Perturbation ---
-    // Triplanar FBM sampling avoids polar UV singularities
-    const waveTime = time.mul(waveSpeedUniform);
-
-    const getWaveHeightAt = Fn(([pPos]: [any]) => {
-        const pNorm = normalize(vec3(pPos));
-        const absN = abs(pNorm);
-        const w = absN.div(absN.x.add(absN.y).add(absN.z).add(0.0001));
-
-        const driftA = vec2(waveTime.mul(0.05), waveTime.mul(0.03));
-        const driftB = vec2(waveTime.mul(-0.08), waveTime.mul(0.02));
-
-        const uvX = vec2(pNorm.y, pNorm.z).mul(waveScaleUniform);
-        const uvY = vec2(pNorm.x, pNorm.z).mul(waveScaleUniform);
-        const uvZ = vec2(pNorm.x, pNorm.y).mul(waveScaleUniform);
-
-        const wx = fbm2D(uvX.add(driftA)).mul(0.6).add(fbm2D(uvX.mul(2.02).add(driftB)).mul(0.4));
-        const wy = fbm2D(uvY.add(driftA)).mul(0.6).add(fbm2D(uvY.mul(2.02).add(driftB)).mul(0.4));
-        const wz = fbm2D(uvZ.add(driftA)).mul(0.6).add(fbm2D(uvZ.mul(2.02).add(driftB)).mul(0.4));
-
-        return wx.mul(w.x).add(wy.mul(w.y)).add(wz.mul(w.z));
-    });
-
-    const computeWaveData = Fn(() => {
-        const hWave0 = getWaveHeightAt(positionLocal);
-
-        // Wave gradient finite differences
-        const waveEps = float(0.015);
-        const pLocNorm = normalize(positionLocal);
-        const vTanL = normalize(cross(vec3(0.0, 1.0, 0.0), pLocNorm));
-        const vBitL = normalize(cross(pLocNorm, vTanL));
-
-        const pTanL = normalize(positionLocal.add(vTanL.mul(waveEps)));
-        const pBitL = normalize(positionLocal.add(vBitL.mul(waveEps)));
-
-        const hWaveTan = getWaveHeightAt(pTanL);
-        const hWaveBit = getWaveHeightAt(pBitL);
-
-        const dWaveTan = hWaveTan.sub(hWave0).div(waveEps);
-        const dWaveBit = hWaveBit.sub(hWave0).div(waveEps);
-
-        const waveGradLocal = vTanL.mul(dWaveTan).add(vBitL.mul(dWaveBit)).mul(waveHeightUniform);
-        const normWorld = normalize(positionWorld);
-        const waveNormWorld = normalize(normWorld.sub(waveGradLocal));
-        return vec4(waveNormWorld, hWave0);
-    });
-
+    // Procedural Animated Waves
     const normWorld = normalize(positionWorld);
     const waveData = wavesEnabledUniform.greaterThan(0.0).select(
-        computeWaveData(),
+        computeWaveData(waveSpeedUniform, waveScaleUniform, waveHeightUniform),
         vec4(normWorld, float(0.0))
     );
     const waveNormWorld = waveData.xyz;
     const hWave0 = waveData.w;
 
-    // Smoothly blend wave normal for ocean regions
     const oceanNormWorld = mix(normWorld, waveNormWorld, spec);
 
-    // Bathymetry Specular Masking: dampens specular reflections near coasts and boosts deep ocean glint
-    // depthFactor is ~0.0 in deep ocean, ~1.0 in shallow coastal waters
-    const deepOceanGlintBoost = float(1.0).add(float(1.0).sub(depthFactor).mul(0.5));
-    const coastalSpecDampen = float(1.0).sub(smoothstep(float(0.1), float(0.8), depthFactor).mul(0.7));
+    const deepOceanGlintBoost = float(1.0).add(float(1.0).sub(depthFactor).mul(CONSTANTS.OCEAN_SHADER.DEEP_OCEAN_GLINT_BOOST));
+    const coastalSpecDampen = float(1.0).sub(smoothstep(float(CONSTANTS.OCEAN_SHADER.COASTAL_SPEC_DAMPEN_MIN), float(CONSTANTS.OCEAN_SHADER.COASTAL_SPEC_DAMPEN_MAX), depthFactor).mul(CONSTANTS.OCEAN_SHADER.COASTAL_SPEC_DAMPEN_FACTOR));
     const bathymetrySpecMask = deepOceanGlintBoost.mul(coastalSpecDampen);
 
-    // Fresnel reflection & View direction calculations
     const viewDirWorld = normalize(cameraPosition.sub(positionWorld));
     const cosViewWave = max(float(0.0), dot(oceanNormWorld, viewDirWorld));
     const fresnelVal = pow(float(1.0).sub(cosViewWave), fresnelExponentUniform).mul(fresnelStrengthUniform).mul(spec).mul(bathymetrySpecMask);
     const fresnelGlow = fresnelColorUniform.mul(fresnelVal);
 
-    // Subsurface Scattering (sunlight scattering through ocean depth)
     const sunLight = max(float(0.0), dot(oceanNormWorld, sunDir));
-    const forwardScatter = pow(max(float(0.0), dot(viewDirWorld, sunDir.negate())), float(3.0)).add(0.2);
+    const forwardScatter = pow(max(float(0.0), dot(viewDirWorld, sunDir.negate())), float(CONSTANTS.OCEAN_SHADER.SSS_FORWARD_EXPONENT)).add(CONSTANTS.OCEAN_SHADER.SSS_FORWARD_BIAS);
     const sssGlow = sssColorUniform.mul(sssIntensityUniform).mul(sunLight).mul(forwardScatter).mul(depthFactor).mul(spec);
 
-    // Specular Sun Glint & Wave Micro-Facet Sparkles
     const halfDirWorld = normalize(sunDir.add(viewDirWorld));
     const NdotH = max(float(0.0), dot(oceanNormWorld, halfDirWorld));
     
-    // Direct physical specular sun reflection (sharp glint) independent of sparkle noise (modulated by bathymetry)
-    const sunGlint = pow(NdotH, float(120.0)).mul(sunGlintPowerUniform).mul(spec).mul(bathymetrySpecMask);
-    // Broader wave micro-facet sparkle
-    const waveSparkle = pow(NdotH, float(20.0)).mul(0.4).mul(spec).mul(waveSparkleUniform).mul(bathymetrySpecMask);
-    const waveSparkleGlow = vec3(1.0, 0.95, 0.85).mul(sunGlint).add(vec3(0.5, 0.75, 1.0).mul(waveSparkle)).mul(sunLight).mul(wavesEnabledUniform);
+    const sunGlint = pow(NdotH, float(CONSTANTS.OCEAN_SHADER.SUN_GLINT_EXPONENT)).mul(sunGlintPowerUniform).mul(spec).mul(bathymetrySpecMask);
+    const waveSparkle = pow(NdotH, float(CONSTANTS.OCEAN_SHADER.WAVE_SPARKLE_EXPONENT)).mul(CONSTANTS.OCEAN_SHADER.WAVE_SPARKLE_INTENSITY).mul(spec).mul(waveSparkleUniform).mul(bathymetrySpecMask);
+    const waveSparkleGlow = vec3(
+        CONSTANTS.OCEAN_SHADER.SUN_GLINT_TINT[0],
+        CONSTANTS.OCEAN_SHADER.SUN_GLINT_TINT[1],
+        CONSTANTS.OCEAN_SHADER.SUN_GLINT_TINT[2]
+    ).mul(sunGlint).add(vec3(
+        CONSTANTS.OCEAN_SHADER.WAVE_SPARKLE_TINT[0],
+        CONSTANTS.OCEAN_SHADER.WAVE_SPARKLE_TINT[1],
+        CONSTANTS.OCEAN_SHADER.WAVE_SPARKLE_TINT[2]
+    ).mul(waveSparkle)).mul(sunLight).mul(wavesEnabledUniform);
 
-    // Wave Crest Foam (foam along wave peaks on open ocean)
-    const waveCrestFoam = smoothstep(0.62, 0.82, hWave0).mul(foamIntensityUniform).mul(spec).mul(0.6).mul(wavesEnabledUniform);
+    const waveCrestFoam = smoothstep(float(CONSTANTS.OCEAN_SHADER.WAVE_CREST_FOAM_MIN), float(CONSTANTS.OCEAN_SHADER.WAVE_CREST_FOAM_MAX), hWave0).mul(foamIntensityUniform).mul(spec).mul(CONSTANTS.OCEAN_SHADER.WAVE_CREST_FOAM_FACTOR).mul(wavesEnabledUniform);
 
-    // Procedural Shore Foam Effect (Depth-Buffer Comparison):
-    // Compare ocean surface height (hWave0) against coastal bathymetry depth (depthFactor)
-    // When ocean surface height is near coastal depth in shallow waters, dynamically increase white pixel intensity to represent foam
-    const shoreDepthDiff = abs(hWave0.sub(depthFactor.mul(0.7)));
-    const dynamicShoreFoam = smoothstep(float(0.35), float(0.02), shoreDepthDiff)
-        .mul(smoothstep(float(0.20), float(0.85), depthFactor))
+    const shoreDepthDiff = abs(hWave0.sub(depthFactor.mul(CONSTANTS.OCEAN_SHADER.SHORE_FOAM_DEPTH_SCALE)));
+    const dynamicShoreFoam = smoothstep(float(CONSTANTS.OCEAN_SHADER.SHORE_FOAM_DIFF_MAX), float(CONSTANTS.OCEAN_SHADER.SHORE_FOAM_DIFF_MIN), shoreDepthDiff)
+        .mul(smoothstep(float(CONSTANTS.OCEAN_SHADER.SHORE_FOAM_DEPTH_MIN), float(CONSTANTS.OCEAN_SHADER.SHORE_FOAM_DEPTH_MAX), depthFactor))
         .mul(spec)
         .mul(foamIntensityUniform)
-        .mul(1.4);
+        .mul(CONSTANTS.OCEAN_SHADER.SHORE_FOAM_INTENSITY_BOOST);
 
     const totalFoam = waveCrestFoam.add(dynamicShoreFoam).clamp(0.0, 1.0);
-    const oceanSurfaceWithWaves = mix(oceanSurfaceTex, vec3(0.95, 0.98, 1.0), totalFoam);
+    const waveFoamColor = vec3(
+        CONSTANTS.OCEAN_SHADER.WAVE_FOAM_COLOR[0],
+        CONSTANTS.OCEAN_SHADER.WAVE_FOAM_COLOR[1],
+        CONSTANTS.OCEAN_SHADER.WAVE_FOAM_COLOR[2]
+    );
+    const oceanSurfaceWithWaves = mix(oceanSurfaceTex.rgb, waveFoamColor, totalFoam);
 
-    // Coastal Shelf Foam (originates at continent shoreline and fades outward into ocean)
     const foamMin = foamThresholdUniform.sub(coastalFadeDistanceUniform).clamp(0.0, 1.0);
-    const coastalFoamMask = smoothstep(foamMin, foamThresholdUniform, depthFactor).mul(pow(spec, float(2.0))).mul(0.5);
-    const finalSurfaceTex = mix(oceanSurfaceWithWaves, vec3(0.90, 0.94, 0.98), coastalFoamMask.mul(foamIntensityUniform));
+    const coastalFoamMask = smoothstep(foamMin, foamThresholdUniform, depthFactor).mul(pow(spec, float(CONSTANTS.OCEAN_SHADER.COASTAL_FOAM_SPEC_POWER))).mul(CONSTANTS.OCEAN_SHADER.COASTAL_FOAM_FACTOR);
+    const coastalFoamColor = vec3(
+        CONSTANTS.OCEAN_SHADER.COASTAL_FOAM_COLOR[0],
+        CONSTANTS.OCEAN_SHADER.COASTAL_FOAM_COLOR[1],
+        CONSTANTS.OCEAN_SHADER.COASTAL_FOAM_COLOR[2]
+    );
+    const finalSurfaceTex = mix(oceanSurfaceWithWaves, coastalFoamColor, coastalFoamMask.mul(foamIntensityUniform));
 
     // SST / GIBS Data Overlay
     const gibsEnabledUniform = uniform(CONSTANTS.GUI.EARTH.GIBS_ENABLED ? 1.0 : 0.0);
@@ -471,16 +303,14 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     group.userData.gibsOpacity = gibsOpacityUniform;
     group.userData.gibsLayer = gibsLayerUniform;
 
-    const sstSample = sstMapTex ? texture(sstMapTex) : vec4(0.0);
-    const imergSampleRaw = imergMapTex ? texture(imergMapTex) : vec4(0.0);
-    const viirsSample = viirsTrueColorMapTex ? texture(viirsTrueColorMapTex) : vec4(0.0);
+    const sstSample = tex.sstMapTex ? texture(tex.sstMapTex) : vec4(0.0);
+    const imergSampleRaw = tex.imergMapTex ? texture(tex.imergMapTex) : vec4(0.0);
+    const viirsSample = tex.viirsTrueColorMapTex ? texture(tex.viirsTrueColorMapTex) : vec4(0.0);
 
-    // IMERG Precipitation Rate overlay transparency mask
     const imergIntensity = imergSampleRaw.r.add(imergSampleRaw.g).add(imergSampleRaw.b);
     const imergAlpha = imergSampleRaw.a.mul(smoothstep(0.01, 0.08, imergIntensity));
     const imergSample = vec4(imergSampleRaw.rgb, imergAlpha);
 
-    // Select layer: 3.0 = VIIRS True Color (Daily), 2.0 = IMERG Precipitation Rate, 1.0 = MODIS NDVI, 0.0 = Sea Surface Temp Anomalies
     const gibsSample = gibsLayerUniform.greaterThan(2.5).select(
         viirsSample,
         gibsLayerUniform.greaterThan(1.5).select(
@@ -490,31 +320,6 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     );
     const gibsFactor = gibsEnabledUniform.mul(gibsOpacityUniform).mul(gibsSample.a);
 
-    group.userData.updateGibsDate = async (dateStr: string) => {
-        const cleanDate = dateStr.trim();
-        const viirsUrl = `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=VIIRS_SNPP_CorrectedReflectance_TrueColor&FORMAT=image/jpeg&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=${cleanDate}`;
-        const imergUrl = `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=IMERG_Precipitation_Rate&FORMAT=image/png&BBOX=-180,-90,180,90&SRS=EPSG:4326&WIDTH=2048&HEIGHT=1024&TIME=${cleanDate}`;
-
-        try {
-            if (viirsTrueColorMapTex) {
-                const newTex = await loader.loadAsync(viirsUrl);
-                newTex.colorSpace = THREE.SRGBColorSpace;
-                newTex.anisotropy = maxAnisotropy;
-                viirsTrueColorMapTex.image = newTex.image;
-                viirsTrueColorMapTex.needsUpdate = true;
-            }
-            if (imergMapTex) {
-                const newTex = await loader.loadAsync(imergUrl);
-                newTex.colorSpace = THREE.SRGBColorSpace;
-                newTex.anisotropy = maxAnisotropy;
-                imergMapTex.image = newTex.image;
-                imergMapTex.needsUpdate = true;
-            }
-        } catch (e) {
-            console.warn("Could not load GIBS data for date:", cleanDate, e);
-        }
-    };
-
     const displacementScaleUniform = uniform(CONSTANTS.GUI.EARTH.DISPLACEMENT_SCALE || 0.02);
     const landRoughnessUniform = uniform(CONSTANTS.GUI.EARTH.LAND_ROUGHNESS || 0.8);
     const albedoPbrStrengthUniform = uniform(CONSTANTS.GUI.EARTH.ALBEDO_PBR_MODULATION || 0.35);
@@ -522,8 +327,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     group.userData.landRoughness = landRoughnessUniform;
     group.userData.albedoPbrStrength = albedoPbrStrengthUniform;
 
-    // Apply vertex displacement map from bump_map texture
-    const bumpVal = texture(bumpMapTex).r;
+    const bumpVal = texture(tex.bumpMapTex).r;
     earthMaterial.positionNode = positionLocal.add(normalize(positionLocal).mul(bumpVal.mul(displacementScaleUniform)));
 
     const rawLitEarthColor = finalSurfaceTex.add(fresnelGlow).add(sssGlow).add(waveSparkleGlow).mul(cloudShadow).mul(twilightTint).mul(terrainShadowColor).mul(eclipseDimmer);
@@ -534,9 +338,6 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
         return earthBaseColor;
     })() as any;
     
-    // Specular map for water reflections: white spec = water, black spec = land
-    // Land roughness is modulated by bump_map elevation, vegetation density, and MODIS albedo brightness
-    // High albedo = dry sand/ice glare (lower roughness), Low albedo = high absorption vegetation canopy (higher roughness)
     const albedoRoughnessShift = float(0.5).sub(albedoVal).mul(albedoPbrStrengthUniform);
     const landRoughnessMap = mix(landRoughnessUniform.mul(0.6), landRoughnessUniform, bumpVal)
         .add(vegFactor.mul(ndviEnhanceUniform).mul(0.15))
@@ -545,7 +346,6 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const baseRoughness = mix(landRoughnessMap, waterRoughnessUniform, spec);
     const baseMetalness = mix(0.0, waterMetalnessUniform, spec);
     
-    // Completely kill the specular highlight of the directional sun light in the umbra
     earthMaterial.roughnessNode = mix(baseRoughness, float(1.0), moonEclipseShadow);
     earthMaterial.metalnessNode = mix(baseMetalness, float(0.0), moonEclipseShadow);
     earthMaterial.specularColorNode = mix(vec3(1.0), vec3(0.0), moonEclipseShadow);
@@ -556,14 +356,11 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const bumpScaleUniform = uniform(vec2(CONSTANTS.GUI.EARTH.BUMP_SCALE, CONSTANTS.GUI.EARTH.BUMP_SCALE));
     group.userData.bumpScale = bumpScaleUniform;
     
-    // Dynamic bump intensity fades as surface enters shadow
     const bumpFade = smoothstep(-0.15, 0.15, sunDot);
-    earthMaterial.normalNode = normalMap(texture(normalMapTex), bumpScaleUniform.mul(bumpFade));
+    earthMaterial.normalNode = normalMap(texture(tex.normalMapTex), bumpScaleUniform.mul(bumpFade));
 
-    // The night map is RGB, we multiply by the fade factor and an intensity boost
-    // Multiplier dictates how deeply the lights bloom
-    const nightLights = texture(nightMapTex).mul(nightFade).mul(cityLightsUniform);
-    const darkSideAmbient = texture(colorMapTex).mul(nightFade).mul(darkSideBrightnessUniform).mul(0.5);
+    const nightLights = texture(tex.nightMapTex).mul(nightFade).mul(cityLightsUniform);
+    const darkSideAmbient = texture(tex.colorMapTex).mul(nightFade).mul(darkSideBrightnessUniform).mul(0.5);
     const baseEmissive = nightLights.add(darkSideAmbient).mul(float(1.0).sub(gibsFactor));
     const gibsEmissive = gibsSample.rgb.mul(gibsFactor);
     earthMaterial.emissiveNode = baseEmissive.add(gibsEmissive) as any;
@@ -578,10 +375,8 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const cloudsGeoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.05, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
     const cloudsMaterial = new MeshPhysicalNodeMaterial();
     
-    const finalCloudOpacity = texture(cloudsMapTex).r;
+    const finalCloudOpacity = texture(tex.cloudsMapTex).r;
     
-    // Add subtle moon/starlight scattering on the dark side
-    // And base baseDarkSideScatter on nightFade to match earth
     const baseDarkSideScatter = mix(vec3(0.005, 0.007, 0.01), vec3(0.05, 0.06, 0.08), nightFade);
     const darkSideScatter = baseDarkSideScatter.mul(darkSideBrightnessUniform).mul(20.0);
     
@@ -601,8 +396,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     cloudsMaterial.specularIntensityNode = mix(float(1.0), float(0.0), moonEclipseShadow);
     cloudsMaterial.iorNode = mix(float(1.5), float(1.0), moonEclipseShadow);
     
-    // Procedural Cloud Normals from cloud height map - dynamically faded
-    cloudsMaterial.normalNode = bumpMap(texture(cloudsMapTex), float(0.02).mul(bumpFade));
+    cloudsMaterial.normalNode = bumpMap(texture(tex.cloudsMapTex), float(0.02).mul(bumpFade));
     
     cloudsMaterial.transparent = true;
     cloudsMaterial.opacityNode = finalCloudOpacity;
@@ -617,142 +411,17 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
     const cloudsLow = new THREE.Mesh(cloudsGeoLow, cloudsMaterial);
     cloudsLow.name = 'clouds';
 
-    // 3. Atmosphere (Outer Halo)
-    // Renders behind the earth and extends outward to create a volumetric halo 
-    const atmosGeoHigh = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
-    const atmosGeoMed = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
-    const atmosGeoLow = new THREE.SphereGeometry(CONSTANTS.ATMOSPHERE_RADIUS, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
-    const atmosMaterial = new MeshBasicNodeMaterial();
-    atmosMaterial.transparent = true;
-    atmosMaterial.side = THREE.BackSide;
-    atmosMaterial.depthWrite = false;
-    atmosMaterial.blending = THREE.AdditiveBlending;
-
-    // Vector math using TSL for WebGPU Fresnel
-    const dirToFrag = normalize(positionWorld.sub(cameraPosition));
-    const worldNormal = normalize(positionWorld);
-    
-    // v is 0 at the exact rim of the atmosphere sphere (R=10.2)
-    // and increases as we move inwards. Because the earth (R=10) blocks the rest,
-    // the maximum visible v is roughly sqrt(1 - (10/10.2)^2) ≈ 0.197
-    const v = dot(dirToFrag, worldNormal).clamp(0.0, 1.0);
-    
-    // Configurable parameters via UserData
-    const rayleighColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.RAYLEIGH_COLOR));
-    const rayleighIntensityUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.RAYLEIGH_INTENSITY);
-    const mieColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.MIE_COLOR));
-    const airglowColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.AIRGLOW_COLOR));
-    const airglowSecondaryColorUniform = uniform(new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.AIRGLOW_SECONDARY_COLOR || 0x3377ff));
-    const atmosModeUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.MODE === 'Scattering' ? 0.0 : 1.0);
-    const atmosDensityUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.DENSITY);
-    const outerGlowPowerUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.OUTER_GLOW_POWER || 2.5);
-    const outerGlowIntensityUniform = uniform(CONSTANTS.GUI.ATMOSPHERE.OUTER_GLOW_INTENSITY || 1.0);
-    
-    group.userData.rayleighColor = rayleighColorUniform;
-    group.userData.rayleighIntensity = rayleighIntensityUniform;
-    group.userData.mieColor = mieColorUniform;
-    group.userData.airglowColor = airglowColorUniform;
-    group.userData.airglowSecondaryColor = airglowSecondaryColorUniform;
-    group.userData.atmosMode = atmosModeUniform;
-    group.userData.atmosDensity = atmosDensityUniform;
-    group.userData.outerGlowPower = outerGlowPowerUniform;
-    group.userData.outerGlowIntensity = outerGlowIntensityUniform;
-
-    // Sun lighting calculations for atmospheric scattering
-    const sunDotAtmos = dot(worldNormal, sunDir);
-    const cosTheta = dot(dirToFrag, sunDir);
-
-    // Scale v so that it reaches near 1.0 at the point where the earth occludes it.
-    // That way the halo is bright right next to the earth, and softly fades to 0 at the outer edge.
-    const normalizedV = v.mul(5.0);
-    const opticalDepth = pow(normalizedV.clamp(0.00001, 1.0), outerGlowPowerUniform).mul(outerGlowIntensityUniform);
-
-    // --- RAYLEIGH SCATTERING ---
-    // Phase Function: 3 / (16 * PI) * (1 + cosTheta^2)
-    const rayleighPhase = cosTheta.mul(cosTheta).add(1.0).mul(3.0 / (16.0 * Math.PI));
-    const rayleighScattering = rayleighColorUniform.mul(rayleighPhase).mul(atmosDensityUniform).mul(rayleighIntensityUniform);
-
-    // --- MIE SCATTERING ---
-    // Phase Function (Henyey-Greenstein)
-    const g = 0.76;
-    const g2 = g * g;
-    const miePhaseBase = cosTheta.mul(-2.0 * g).add(1.0 + g2);
-    // (3 * (1 - g^2) / (8 * PI * (2 + g^2))) * (1 + cosTheta^2) / (1 + g^2 - 2g*cosTheta)^1.5
-    const miePhaseCoeff = (3.0 * (1.0 - g2)) / (8.0 * Math.PI * (2.0 + g2));
-    const miePhase = cosTheta.mul(cosTheta).add(1.0).mul(miePhaseCoeff).div(pow(miePhaseBase, 1.5));
-    const mieScattering = mieColorUniform.mul(miePhase).mul(atmosDensityUniform);
-
-    // Overall intensity fade on the dark side of the earth
-    const intensityPhase = smoothstep(-0.2, 0.2, sunDotAtmos);
-
-    const scatteredLight = rayleighScattering.add(mieScattering).mul(intensityPhase);
-
-    // --- AIRGLOW ---
-    // v goes from 0 at R=10.2 to ~0.197 at R=10
-    // Narrow green band at top (low v):
-    const greenBand = smoothstep(0.06, 0.02, v).mul(smoothstep(0.0, 0.04, v));
-    // Faint secondary band lower down (higher v):
-    const blueBand = smoothstep(0.15, 0.05, v).mul(smoothstep(0.03, 0.1, v));
-    
-    const airglowLight = airglowColorUniform.mul(greenBand).mul(4.0)
-        .add(airglowSecondaryColorUniform.mul(blueBand).mul(1.5))
-        .mul(intensityPhase);
-        
-    const finalScattering = scatteredLight.mul(opticalDepth);
-    const finalAirglow = airglowLight.add(finalScattering.mul(0.1));
-
-    // Outer atmosphere adds scattered light
-    const atmosBaseColor = mix(finalScattering, finalAirglow, atmosModeUniform);
-    atmosMaterial.colorNode = Fn(() => {
-        Discard(cutDiscard);
-        return atmosBaseColor;
-    })() as any;
-    
-    const atmosHigh = new THREE.Mesh(atmosGeoHigh, atmosMaterial);
-    const atmosMed = new THREE.Mesh(atmosGeoMed, atmosMaterial);
-    const atmosLow = new THREE.Mesh(atmosGeoLow, atmosMaterial);
-
-    // 4. Atmosphere (Inner surface glow on Earth)
-    // A thin localized front-faced glow that sits right on the earth's surface
-    // to blend the silhouette into the outer halo.
-    const innerAtmosGeoHigh = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, CONSTANTS.SEGMENTS, CONSTANTS.SEGMENTS);
-    const innerAtmosGeoMed = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
-    const innerAtmosGeoLow = new THREE.SphereGeometry(CONSTANTS.EARTH_RADIUS + 0.02, Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)), Math.max(32, Math.floor(CONSTANTS.SEGMENTS / 2)));
-    const innerAtmosMaterial = new MeshBasicNodeMaterial();
-    innerAtmosMaterial.transparent = true;
-    innerAtmosMaterial.side = THREE.FrontSide;
-    innerAtmosMaterial.depthWrite = false;
-    innerAtmosMaterial.blending = THREE.AdditiveBlending;
-
-    const viewDir = normalize(cameraPosition.sub(positionWorld));
-    const invDot = dot(viewDir, worldNormal).clamp(0.0, 1.0).oneMinus(); 
-    
-    // Concentrate at the rim of the earth
-    const innerOpticalDepth = pow(invDot.clamp(0.0001, 1.0), 6.0).mul(1.5);
-    
-    // For the inner glow, mix standard scattering with a tint of the airglow color
-    const innerFinalScattering = scatteredLight.mul(innerOpticalDepth);
-    const innerFinalAirglow = innerFinalScattering.mul(0.5).add(airglowColorUniform.mul(innerOpticalDepth).mul(0.5).mul(intensityPhase));
-    
-    const innerAtmosBaseColor = mix(innerFinalScattering, innerFinalAirglow, atmosModeUniform);
-    innerAtmosMaterial.colorNode = Fn(() => {
-        Discard(cutDiscard);
-        return innerAtmosBaseColor;
-    })() as any;
-
-    
-    const innerAtmosHigh = new THREE.Mesh(innerAtmosGeoHigh, innerAtmosMaterial);
-    const innerAtmosMed = new THREE.Mesh(innerAtmosGeoMed, innerAtmosMaterial);
-    const innerAtmosLow = new THREE.Mesh(innerAtmosGeoLow, innerAtmosMaterial);
+    // 3. Atmosphere
+    const atmosMeshes = createAtmosphereMeshes(sunDir, cutDiscard, group.userData);
 
     const highGroup = new THREE.Group();
-    highGroup.add(earthHigh, cloudsHigh, atmosHigh, innerAtmosHigh);
+    highGroup.add(earthHigh, cloudsHigh, ...atmosMeshes.highGroupMeshes);
 
     const medGroup = new THREE.Group();
-    medGroup.add(earthMed, cloudsMed, atmosMed, innerAtmosMed);
+    medGroup.add(earthMed, cloudsMed, ...atmosMeshes.medGroupMeshes);
 
     const lowGroup = new THREE.Group();
-    lowGroup.add(earthLow, cloudsLow, atmosLow, innerAtmosLow);
+    lowGroup.add(earthLow, cloudsLow, ...atmosMeshes.lowGroupMeshes);
 
     const lod = new THREE.LOD();
     lod.addLevel(highGroup, 0);
@@ -761,7 +430,7 @@ export async function createEarth(loader: THREE.TextureLoader, sunDirUniform: an
 
     group.add(lod);
 
-    // 5. Inner Layers Model (Inner/Outer Core, Mantle, Crust & Cross-Section Cap)
+    // 4. Inner Layers Model
     const innerLayers = createInnerLayers(cutawayProgressUniform);
     const initialCutaway = CONSTANTS.GUI.EARTH.CUTAWAY || 0.0;
     if (innerLayers.userData.updateSubLayerVisibilities) {
