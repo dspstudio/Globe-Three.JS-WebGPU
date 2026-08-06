@@ -59,8 +59,7 @@ export function createAtmosphereMeshes(
 
   const dirToFrag = normalize(positionWorld.sub(cameraPosition));
   const worldNormal = normalize(positionWorld);
-  const viewDot = dot(dirToFrag, worldNormal).abs();
-  const v = viewDot.oneMinus().clamp(0.0, 1.0);
+  const v = dot(dirToFrag, worldNormal).clamp(0.0, 1.0);
 
   const rayleighColorUniform = uniform(
     new THREE.Color(CONSTANTS.GUI.ATMOSPHERE.RAYLEIGH_COLOR)
@@ -178,7 +177,9 @@ export function createAtmosphereMeshes(
   innerAtmosMaterial.depthWrite = false;
   innerAtmosMaterial.blending = THREE.AdditiveBlending;
 
-  const invDot = viewDot.clamp(0.0, 1.0).oneMinus();
+  const viewDir = normalize(cameraPosition.sub(positionWorld));
+  const innerDot = dot(viewDir, worldNormal).clamp(0.0, 1.0);
+  const invDot = innerDot.oneMinus();
   const innerOpticalDepth = pow(invDot.clamp(0.0001, 1.0), 6.0).mul(1.5);
 
   const innerFinalScattering = scatteredLight.mul(innerOpticalDepth);
