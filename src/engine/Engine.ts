@@ -213,7 +213,7 @@ export class Engine {
 
     this.controls = new OrbitControls(this.camera, this.canvas);
     this.controls.enableDamping = true;
-    this.controls.enablePan = false;
+    this.controls.enablePan = true;
     this.controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
     this.controls.minDistance = CONSTANTS.EARTH_RADIUS * 1.2;
     this.controls.maxDistance = CONSTANTS.EARTH_RADIUS * 10;
