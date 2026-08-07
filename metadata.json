@@ -1,5 +1,5 @@
 {
-  "name": "Remix: Earth WebGPU Engine",
+  "name": "Remix: Earth WebGPU Engine FINAL",
   "description": "Real-time Earth rendering engine using Three.js WebGPU backend, featuring atmosphere and terrain visualization.",
   "requestFramePermissions": [],
   "majorCapabilities": [

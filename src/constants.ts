@@ -157,9 +157,9 @@ export const CONSTANTS = {
     },
     BLOOM: {
       ENABLED: true,
-      STRENGTH: 0.08,
-      RADIUS: 0.3,
-      THRESHOLD: 0.92,
+      STRENGTH: 0.4,
+      RADIUS: 0.5,
+      THRESHOLD: 0.5,
     },
     COLOR_GRADING: {
       CONTRAST: 1,
@@ -197,7 +197,7 @@ export const CONSTANTS = {
       OFFSET: 0.5,
     },
     CHROMATIC_ABERRATION: {
-      ENABLED: false,
+      ENABLED: true,
       STRENGTH: 0.25,
       SCALE: 0.5,
     },
